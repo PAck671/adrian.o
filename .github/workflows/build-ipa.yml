@@ -1,0 +1,24 @@
+name: Build unsigned IPA
+
+on:
+  push:
+    paths:
+      - "PulseAndPlan/**"
+      - ".github/workflows/build-ipa.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Build unsigned IPA
+        working-directory: PulseAndPlan
+        run: ./build_ipa.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PulseAndPlan-unsigned-ipa
+          path: PulseAndPlan/dist/PulseAndPlan-unsigned.ipa
+          if-no-files-found: error
