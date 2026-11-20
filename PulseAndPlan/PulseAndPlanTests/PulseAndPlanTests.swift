@@ -76,4 +76,65 @@ final class PulseAndPlanTests: XCTestCase {
         XCTAssertEqual(nearby.latitude, fuzzy.latitude, accuracy: 1e-9)
         XCTAssertEqual(nearby.longitude, fuzzy.longitude, accuracy: 1e-9)
     }
+
+    func testFourInRowWinsAndAIBlocks() {
+        // A: 0,1,2,3 on the bottom row; B stacks on column 6.
+        XCTAssertEqual(FourInRow.winner([0, 6, 1, 6, 2, 6, 3]), .a)
+        XCTAssertNil(FourInRow.winner([0, 6, 1, 6, 2]))
+        XCTAssertEqual(FourInRow.winner([0, 1, 1, 2, 2, 3, 2, 3, 3, 6, 3]), .a) // diagonal
+        // B to move; A threatens column 3. AI must block.
+        var rng = SeededRandom(code: "AIAI", salt: "t")
+        XCTAssertEqual(FourInRow.aiMove([0, 6, 1, 6, 2], using: &rng), 3)
+        XCTAssertFalse(FourInRow.canDrop([3, 3, 3, 3, 3, 3], in: 3))
+    }
+
+    func testSeaBattleFleetsAreValidAndDeterministic() {
+        for code in codes {
+            let game = SeaBattle(code: code)
+            for role in GameRole.allCases {
+                let ships = game.ships[role, default: []]
+                XCTAssertEqual(ships.map(\.count), SeaBattle.fleetLengths, code)
+                XCTAssertEqual(game.fleet(role).count, SeaBattle.fleetLengths.reduce(0, +), "\(code) ships overlap")
+                XCTAssertTrue(game.fleet(role).allSatisfy { (0..<64).contains($0) })
+            }
+            XCTAssertEqual(SeaBattle(code: code).ships, game.ships)
+        }
+        // Firing at every enemy cell (alternating with misses) wins.
+        let game = SeaBattle(code: "LOVE")
+        var moves: [Int] = []
+        let targets = Array(game.fleet(.b)).sorted()
+        let decoys = (0..<64).filter { !game.fleet(.a).contains($0) }
+        for (i, cell) in targets.enumerated() { moves += [cell, decoys[i]] }
+        XCTAssertEqual(game.winner(moves), .a)
+    }
+
+    func testBlockDropClearsLinesAndSharesPieceOrder() {
+        var a = BlockDrop(code: "DUEL"), b = BlockDrop(code: "DUEL")
+        var kindsA: [Int] = [], kindsB: [Int] = []
+        for _ in 0..<14 {
+            kindsA.append(a.piece.kind); a.hardDrop()
+            kindsB.append(b.piece.kind); b.hardDrop()
+        }
+        XCTAssertEqual(kindsA, kindsB)
+        XCTAssertEqual(Set(kindsA.prefix(7)), Set(0..<7)) // 7-bag: every piece once per bag
+
+        var game = BlockDrop(code: "LINE")
+        game.board[BlockDrop.height - 1] = [1, 1, 1, 0, 0, 0, 0, 1, 1, 1]
+        game.piece = BlockPiece(kind: 0, rotation: 0, x: 3, y: 0) // horizontal I fills columns 3–6
+        XCTAssertEqual(game.hardDrop(), 1)
+        XCTAssertEqual(game.lines, 1)
+        XCTAssertTrue(game.board[BlockDrop.height - 1].allSatisfy { $0 == 0 })
+    }
+
+    func testOldSettingsKeepDeviceIdWhenFieldsAreAdded() throws {
+        var old = AppSettings()
+        old.myName = "Robin"
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(old)) as? [String: Any])
+        json.removeValue(forKey: "partnerPhone") // simulate a save from before this field existed
+        json.removeValue(forKey: "services")
+        let restored = Persist.decode(try JSONSerialization.data(withJSONObject: json), default: AppSettings())
+        XCTAssertEqual(restored.deviceId, old.deviceId)
+        XCTAssertEqual(restored.myName, "Robin")
+        XCTAssertEqual(restored.services, [])
+    }
 }

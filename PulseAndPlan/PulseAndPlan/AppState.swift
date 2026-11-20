@@ -13,8 +13,12 @@ final class AppState {
                 || settings.demoCity != oldValue.demoCity {
                 restartSync()
             }
+            location.keepAlive = settings.stayConnected
         }
     }
+    var theme: ThemeSettings = Persist.load("theme", default: ThemeSettings()) { didSet { Persist.save(theme, "theme") } }
+    var backgroundImage: UIImage? = UIImage(contentsOfFile: ThemeSettings.photoURL.path())
+    var notes: [SharedNote] = Persist.load("notes", default: []) { didSet { Persist.save(notes, "notes") } }
     var missedPulses: [Pulse] = Persist.load("missedPulses", default: []) { didSet { Persist.save(missedPulses, "missedPulses") } }
     var clips: [VideoClip] = Persist.load("clips", default: []) { didSet { Persist.save(clips, "clips") } }
     var mySwipes: [Int: Bool] = Persist.load("mySwipes", default: [:]) { didSet { Persist.save(mySwipes, "mySwipes") } }
@@ -32,12 +36,20 @@ final class AppState {
     var syncStatus = ""
     var lastIncomingPulse: Pulse?
     var match: Movie?
+    var toast: String?
+    var messageDraft: MessageDraft?
+    private(set) var isActive = true
 
     let haptics = HapticEngine()
     let location = LocationManager()
+    let calendar = CalendarBridge()
     @ObservationIgnored private var sync: SyncService?
     @ObservationIgnored private var started = false
     @ObservationIgnored private var simulatedMissed = false
+    @ObservationIgnored private var batteryBucket = 100
+    @ObservationIgnored private var lastArrivalAlert: [String: Date] = [:]
+    @ObservationIgnored private var wasNearby = false
+    @ObservationIgnored private var toastTask: Task<Void, Never>?
 
     // MARK: Lifecycle
 
@@ -46,8 +58,37 @@ final class AppState {
         started = true
         UIDevice.current.isBatteryMonitoringEnabled = true
         location.onUpdate = { [weak self] in self?.publish($0) }
+        location.keepAlive = settings.stayConnected
         restartSync()
         resumeSharingIfNeeded()
+        Task {
+            _ = await Notifier.requestPermission()
+            if settings.syncCalendar { _ = await importCalendarBusy() }
+        }
+    }
+
+    func setActive(_ active: Bool) {
+        isActive = active
+        if active { resumeSharingIfNeeded() } else { didEnterBackground() }
+    }
+
+    /// In-app toast while open, local notification (with the system buzz) while in the background.
+    func alert(_ title: String, _ body: String) {
+        if isActive {
+            showToast("\(title)\n\(body)")
+        } else {
+            Notifier.post(title: title, body: body)
+        }
+    }
+
+    func showToast(_ text: String) {
+        toastTask?.cancel()
+        toast = text
+        toastTask = Task {
+            try? await Task.sleep(for: .seconds(3.5))
+            guard !Task.isCancelled else { return }
+            toast = nil
+        }
     }
 
     /// App became active (a foreground moment, so iOS allows starting location updates).
@@ -67,7 +108,8 @@ final class AppState {
             let lastActive = UserDefaults.standard.object(forKey: "lastActive") as? Date ?? .distantPast
             service = DemoPartnerService(city: DemoCity.named(settings.demoCity), partnerName: settings.partnerName,
                                          missedSince: simulatedMissed ? nil : lastActive,
-                                         sendWelcomeClip: !clips.contains { isPartner($0.senderId) })
+                                         sendWelcomeClip: !clips.contains { isPartner($0.senderId) },
+                                         seedNote: !notes.contains { isPartner($0.authorId) })
             simulatedMissed = true
         case .live:
             guard let live = SupabaseSyncService(settings: settings) else {
@@ -100,6 +142,7 @@ final class AppState {
             partnerSwipes[s.movieId] = s.liked
             checkMatch(s.movieId)
         case let .location(l):
+            checkPartnerAlerts(old: partnerLocation, new: l)
             partnerLocation = l
         case let .eventUpserted(e):
             if let i = events.firstIndex(where: { $0.id == e.id }) { events[i] = e } else { events.append(e) }
@@ -113,6 +156,126 @@ final class AppState {
             partnerOnline = online
         case let .status(text):
             syncStatus = text
+        case let .notice(n):
+            guard isPartner(n.senderId) else { return }
+            alert(n.kind == .onMyWay ? "🚗 \(settings.partnerName) is on the way" : "💬 \(settings.partnerName)", n.text)
+        case let .noteUpserted(note):
+            if let i = notes.firstIndex(where: { $0.id == note.id }) {
+                notes[i] = note
+            } else {
+                notes.append(note)
+                if isPartner(note.authorId) { alert("📝 \(settings.partnerName) shared a note", String(note.text.prefix(80))) }
+            }
+        case let .noteDeleted(id):
+            notes.removeAll { $0.id == id }
+        }
+    }
+
+    // MARK: Partner alerts (battery, arrivals, nearby)
+
+    private func checkPartnerAlerts(old: LocationShare?, new: LocationShare) {
+        let name = settings.partnerName
+        if let level = new.battery {
+            let bucket = level <= 5 ? 5 : level <= 15 ? 15 : 100
+            if settings.alertBattery, bucket < batteryBucket {
+                alert("🔋 \(name)'s phone is at \(level)%", bucket == 5 ? "It's about to die." : "Their battery is getting low.")
+            }
+            batteryBucket = bucket
+        }
+        guard old != nil else { return } // first fix after launch is not an arrival
+        if settings.alertArrivals, let place = new.placeLabel, place != old?.placeLabel,
+           Date().timeIntervalSince(lastArrivalAlert[place] ?? .distantPast) > 600 {
+            lastArrivalAlert[place] = Date()
+            alert("📍 \(name) arrived", "\(name) is \(place.lowercased().hasPrefix("at ") ? place.lowercased() : place).")
+        }
+        if let me = myCoordinate, let them = new.coordinate {
+            let near = me.distance(to: them) < 1000
+            if settings.alertNearby, near, !wasNearby { alert("💞 \(name) is nearby", "Less than \(formatDistance(1000, miles: settings.useMiles)) away.") }
+            wasNearby = near
+        }
+    }
+
+    /// Schedules sample notifications so you can lock the phone and see how alerts look.
+    func sendTestAlerts() {
+        let name = settings.partnerName
+        Notifier.post(title: "💓 \(name) sent a Heartbeat", body: "Open Pulse & Plan to feel it.", after: 5)
+        Notifier.post(title: "🔋 \(name)'s phone is at 12%", body: "Their battery is getting low.", after: 8)
+        Notifier.post(title: "📍 \(name) arrived", body: "\(name) is at home.", after: 11)
+        showToast("Lock your phone: 3 test alerts arrive in 5–11 s")
+    }
+
+    // MARK: On my way & iMessage
+
+    func sendOnMyWay() async -> String {
+        var text = "On my way to you"
+        if let me = myCoordinate, let them = partnerLocation?.coordinate {
+            if let eta = await TravelTime.eta(from: me, to: them) {
+                text += " · about \(Duration.seconds(eta).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated)))"
+            } else {
+                text += " · \(formatDistance(me.distance(to: them), miles: settings.useMiles)) to go"
+            }
+        }
+        sync?.sendNotice(PartnerNotice(senderId: settings.deviceId, kind: .onMyWay, text: text))
+        showToast("Sent to \(settings.partnerName): \(text)")
+        return text
+    }
+
+    func textPartner(_ body: String) { messageDraft = MessageDraft(body: body) }
+
+    // MARK: Notes
+
+    func saveNote(_ note: SharedNote) {
+        var note = note
+        note.updatedAt = Date()
+        if let i = notes.firstIndex(where: { $0.id == note.id }) { notes[i] = note } else { notes.append(note) }
+        sync?.saveNote(note)
+    }
+
+    func deleteNote(_ note: SharedNote) {
+        notes.removeAll { $0.id == note.id }
+        sync?.deleteNote(note.id)
+    }
+
+    // MARK: Calendar
+
+    /// Replaces your previously imported busy blocks with the next 14 days from the phone's calendars.
+    /// Returns how many were imported, or nil without calendar access.
+    func importCalendarBusy() async -> Int? {
+        guard await calendar.requestAccess() else { return nil }
+        let me = settings.deviceId
+        for old in events where old.fromCalendar == true && old.createdBy == me { deleteEvent(old) }
+        let intervals = calendar.busyIntervals(from: Calendar.current.startOfDay(for: Date()), days: 14)
+        for interval in intervals {
+            saveEvent(SharedEvent(title: "Busy", kind: .busy, start: interval.start, end: interval.end, createdBy: me, fromCalendar: true))
+        }
+        settings.syncCalendar = true
+        return intervals.count
+    }
+
+    func addToCalendar(_ event: SharedEvent) async {
+        guard await calendar.requestAccess() else { return showToast("Allow calendar access in iOS Settings first.") }
+        do {
+            try calendar.add(event, partnerName: settings.partnerName)
+            showToast("Added \"\(event.title)\" to your calendar")
+        } catch {
+            showToast("Couldn't add it: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: Appearance
+
+    func setBackgroundPhoto(_ data: Data) {
+        guard let image = UIImage(data: data) else { return showToast("That image couldn't be read.") }
+        let scale = min(1, 1600 / max(image.size.width, image.size.height))
+        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let resized = image.preparingThumbnail(of: size) ?? image
+        guard let jpeg = resized.jpegData(compressionQuality: 0.85) else { return }
+        do {
+            try jpeg.write(to: ThemeSettings.photoURL, options: .atomic)
+            backgroundImage = resized
+            theme.effect = .photo
+        } catch {
+            showToast("Couldn't save the photo: \(error.localizedDescription)")
         }
     }
 
@@ -124,8 +287,12 @@ final class AppState {
 
     private func receive(_ p: Pulse) {
         guard isPartner(p.senderId), !missedPulses.contains(where: { $0.id == p.id }) else { return }
-        if Date().timeIntervalSince(p.sentAt) > 30 {
-            missedPulses.append(p) // delivered late → it was sent while we were offline
+        if Date().timeIntervalSince(p.sentAt) > 30 || !isActive {
+            // Late (sent while offline) or app in background, where iOS won't play Core Haptics: keep it for later.
+            missedPulses.append(p)
+            if !isActive, settings.alertPulses {
+                Notifier.post(title: "💓 \(settings.partnerName) sent a \(p.pattern.label)", body: "Open Pulse & Plan to feel it.")
+            }
         } else {
             haptics.play(p.pattern, duration: p.duration)
             lastIncomingPulse = p

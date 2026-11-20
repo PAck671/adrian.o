@@ -5,6 +5,7 @@ struct MapTab: View {
     @Environment(AppState.self) private var state
     @State private var camera: MapCameraPosition = .automatic
     @State private var showPlaces = false
+    @Namespace private var pillSpace
 
     var body: some View {
         let partner = state.partnerLocation
@@ -29,8 +30,8 @@ struct MapTab: View {
                 if let p = partner?.coordinate {
                     if partner?.precision == .fuzzy {
                         MapCircle(center: p, radius: 3000)
-                            .foregroundStyle(.pink.opacity(0.15))
-                            .stroke(.pink.opacity(0.6), lineWidth: 1)
+                            .foregroundStyle(.tint.opacity(0.15))
+                            .stroke(.tint.opacity(0.6), lineWidth: 1)
                     }
                     Annotation(settings.partnerName, coordinate: p) {
                         AvatarPin(emoji: settings.partnerAvatar, color: .pink, badge: partner?.placeLabel)
@@ -64,13 +65,20 @@ struct MapTab: View {
         HStack(spacing: 0) {
             ForEach(PrecisionMode.allCases) { mode in
                 let selected = state.settings.precision == mode
-                Button { state.setPrecision(mode) } label: {
+                Button {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) { state.setPrecision(mode) }
+                } label: {
                     Label(mode.label, systemImage: mode.symbol)
                         .font(.subheadline.weight(.semibold))
                         .padding(.vertical, 8)
                         .frame(maxWidth: .infinity)
-                        .background(selected ? color(for: mode) : .clear, in: Capsule())
+                        .background {
+                            if selected {
+                                Capsule().fill(color(for: mode)).matchedGeometryEffect(id: "precision", in: pillSpace)
+                            }
+                        }
                         .foregroundStyle(selected ? .black : .primary)
+                        .contentTransition(.symbolEffect(.replace))
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(selected ? .isSelected : [])
@@ -145,9 +153,14 @@ struct MapTab: View {
             sharingControls
 
             HStack {
-                Button { camera = .automatic } label: { Label("Fit both", systemImage: "arrow.up.left.and.arrow.down.right") }
+                Button { withAnimation(.easeInOut(duration: 0.8)) { camera = .automatic } } label: {
+                    Label("Fit both", systemImage: "arrow.up.left.and.arrow.down.right")
+                }
                 Spacer()
-                Button { showPlaces = true } label: { Label("Saved places", systemImage: "mappin.and.ellipse") }
+                Button { Task { _ = await state.sendOnMyWay() } } label: { Label("On my way", systemImage: "car.fill") }
+                    .disabled(state.myCoordinate == nil)
+                Spacer()
+                Button { showPlaces = true } label: { Label("Places", systemImage: "mappin.and.ellipse") }
             }
             .font(.subheadline)
         }
@@ -166,7 +179,6 @@ struct MapTab: View {
                 Label("Start sharing my location", systemImage: "location.circle.fill").frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
-            .tint(.pink)
         } else if location.canUpgradeToAlways {
             Button { location.requestAlways() } label: {
                 Label("Keep sharing in the background (Allow Always)", systemImage: "location.fill.viewfinder")

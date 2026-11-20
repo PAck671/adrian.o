@@ -15,7 +15,6 @@ struct PulseTab: View {
             }
             .padding()
         }
-        .background(Color.black)
         .fullScreenCover(isPresented: $showComposer) { VideoComposer() }
         .fullScreenCover(item: $reelStart) { ReelPlayer(startClip: $0) }
     }
@@ -56,7 +55,7 @@ struct PulseTab: View {
             }
             ForEach(state.missedPulses) { pulse in
                 HStack {
-                    Image(systemName: pulse.pattern.symbol).foregroundStyle(.pink).frame(width: 28)
+                    Image(systemName: pulse.pattern.symbol).foregroundStyle(.tint).frame(width: 28)
                     VStack(alignment: .leading) {
                         Text("\(state.settings.partnerName) sent a \(pulse.pattern.label)").font(.subheadline)
                         Text(pulse.sentAt, style: .relative).font(.caption).foregroundStyle(.secondary)
@@ -64,13 +63,12 @@ struct PulseTab: View {
                     Spacer()
                     Button("Feel it") { state.playMissed(pulse) }
                         .buttonStyle(.borderedProminent)
-                        .tint(.pink)
                         .controlSize(.small)
                 }
             }
         }
         .padding()
-        .background(RoundedRectangle(cornerRadius: 18).fill(.pink.opacity(0.12)))
+        .background(RoundedRectangle(cornerRadius: 18).fill(.tint.opacity(0.15)))
     }
 
     // MARK: Video walkie-talkie
@@ -82,7 +80,6 @@ struct PulseTab: View {
                 Spacer()
                 Button { showComposer = true } label: { Label("Record", systemImage: "video.fill") }
                     .buttonStyle(.borderedProminent)
-                    .tint(.pink)
             }
             if state.clips.isEmpty {
                 Text("No clips yet. Record up to 60 seconds; your partner watches whenever they're free.")
@@ -143,13 +140,12 @@ struct HapticPad: View {
         GeometryReader { geo in
             ZStack {
                 RoundedRectangle(cornerRadius: 28)
-                    .fill(LinearGradient(colors: [Color(hue: 0.93, saturation: 0.7, brightness: 0.38),
-                                                  Color(hue: 0.76, saturation: 0.6, brightness: 0.25)],
+                    .fill(LinearGradient(colors: state.theme.preset.palette.map { $0.opacity(0.85) },
                                          startPoint: .topLeading, endPoint: .bottomTrailing))
                 ForEach(ripples) { RippleView(ripple: $0) }
                 if holding {
                     Circle()
-                        .fill(.pink.opacity(0.35))
+                        .fill(.tint.opacity(0.35))
                         .frame(width: 120, height: 120)
                         .position(holdPoint)
                         .phaseAnimator([0.8, 1.2]) { view, phase in view.scaleEffect(phase) }
@@ -169,7 +165,7 @@ struct HapticPad: View {
                         guard !touchDown else { return }
                         touchDown = true
                         holdPoint = value.location
-                        addRipple(at: value.location, color: .pink)
+                        addRipple(at: value.location, color: state.theme.accent)
                         holdTask = Task {
                             try? await Task.sleep(for: .milliseconds(350))
                             guard !Task.isCancelled else { return }
@@ -183,7 +179,7 @@ struct HapticPad: View {
                             let duration = state.haptics.endHold()
                             holding = false
                             state.sendPulse(.hold, duration: duration)
-                            addRipple(at: value.location, color: .pink, scale: 9)
+                            addRipple(at: value.location, color: state.theme.accent, scale: 9)
                         } else {
                             state.haptics.play(.tap)
                             state.sendPulse(.tap)

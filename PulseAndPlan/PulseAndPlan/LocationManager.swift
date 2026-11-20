@@ -11,6 +11,11 @@ final class LocationManager: NSObject, CLLocationManagerDelegate {
     private(set) var placeName: String?
     private(set) var isUpdating = false
     @ObservationIgnored var onUpdate: ((CLLocation) -> Void)?
+    /// When on, iOS may not pause updates while you sit still, so the app (and its realtime link) stays alive
+    /// in the background to deliver pulses and alerts. Costs battery, so it's opt-in.
+    @ObservationIgnored var keepAlive = false {
+        didSet { manager.pausesLocationUpdatesAutomatically = !keepAlive }
+    }
 
     @ObservationIgnored private let manager = CLLocationManager()
     @ObservationIgnored private var backgroundSession: CLBackgroundActivitySession?

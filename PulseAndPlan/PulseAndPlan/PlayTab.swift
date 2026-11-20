@@ -27,15 +27,28 @@ struct PlayTab: View {
                 }
 
                 Section("Game") {
-                    Picker("Game", selection: $game) {
-                        ForEach(GameKind.allCases) { Text($0.label).tag($0) }
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible())], spacing: 10) {
+                        ForEach(GameKind.allCases) { kind in
+                            let selected = game == kind
+                            Button { withAnimation(.spring(response: 0.3)) { game = kind } } label: {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Image(systemName: kind.symbol)
+                                        .font(.title2)
+                                        .symbolEffect(.bounce, value: selected)
+                                    Text(kind.label).font(.subheadline.bold())
+                                    Text(kind.blurb).font(.caption2).foregroundStyle(.secondary).lineLimit(3)
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 110, alignment: .topLeading)
+                                .padding(10)
+                                .background(RoundedRectangle(cornerRadius: 14).fill(selected ? AnyShapeStyle(.tint.opacity(0.3)) : AnyShapeStyle(.white.opacity(0.06))))
+                                .overlay(RoundedRectangle(cornerRadius: 14).stroke(selected ? AnyShapeStyle(.tint) : AnyShapeStyle(.clear), lineWidth: 2))
+                                .scaleEffect(selected ? 1.02 : 1)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(selected ? .isSelected : [])
+                        }
                     }
-                    .pickerStyle(.segmented)
-                    Text(game == .circuit
-                         ? "Defuse a 4-module panel before the timer runs out. 3 strikes and it's over."
-                         : "Escape a pitch-black maze. Hit the switch to unlock the exit and dodge the traps.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    .padding(.vertical, 4)
                 }
 
                 Section("Your role") {
@@ -52,14 +65,22 @@ struct PlayTab: View {
                         Label("Start", systemImage: "play.fill").frame(maxWidth: .infinity).font(.headline)
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(.pink)
+                    .disabled(code.count != 4)
+                    Button {
+                        state.textPartner("Let's play \(game.label)! 🎮 Code \(code). I'm Role \(role.rawValue.uppercased()), you take Role \(role.opponent.rawValue.uppercased()).")
+                    } label: {
+                        Label("Invite \(state.settings.partnerName) via iMessage", systemImage: "message.fill").frame(maxWidth: .infinity)
+                    }
                     .disabled(code.count != 4)
                 } footer: {
                     if state.settings.mode == .demo {
-                        Text("Demo tip: flip between A and B with the switch at the top of the game screen to try both roles on one phone.")
+                        Text(game.isTurnBased || game == .blockDrop
+                             ? "Demo: the simulated partner plays the other side for you."
+                             : "Demo tip: flip between A and B with the switch at the top of the game screen to try both roles on one phone.")
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
             .navigationTitle("Play")
             .navigationDestination(isPresented: $playing) { GameScreen(code: code, game: game, role: role) }
         }
@@ -71,8 +92,17 @@ struct PlayTab: View {
         case (.circuit, .b): "You see the rulebook. Ask questions and tell your partner what to press."
         case (.labyrinth, .a): "You only see where you've been. Move when your partner tells you."
         case (.labyrinth, .b): "You see the whole map, traps and switch. Guide your partner out."
+        case (.seaBattle, .a): "You fire first. Your partner joins as Role B."
+        case (.seaBattle, .b): "Your partner (Role A) fires first."
+        case (.fourInRow, .a): "You're red 🔴 and go first. Your partner joins as Role B."
+        case (.fourInRow, .b): "You're yellow 🟡. Your partner (Role A) goes first."
+        case (.blockDrop, _): "Same pieces for both of you. Pick different roles so your scores don't overwrite each other."
         }
     }
+}
+
+extension GameKind {
+    var isTurnBased: Bool { self == .seaBattle || self == .fourInRow }
 }
 
 struct GameScreen: View {
@@ -93,9 +123,13 @@ struct GameScreen: View {
             case (.circuit, .b): CircuitManual(puzzle: CircuitPuzzle(code: code), code: code)
             case (.labyrinth, .a): LabyrinthPlayer(maze: Labyrinth(code: code), code: code)
             case (.labyrinth, .b): LabyrinthGuide(maze: Labyrinth(code: code), code: code)
+            case (.seaBattle, _): SeaBattleView(code: code, role: role).id(role)
+            case (.fourInRow, _): FourInRowView(code: code, role: role).id(role)
+            case (.blockDrop, _): BlockDropView(code: code, role: role).id(role)
             }
         }
-        .background(Color.black)
+        .transition(.opacity.combined(with: .scale(scale: 0.97)))
+        .animation(.easeInOut(duration: 0.25), value: role)
         .navigationTitle("\(game.label) · \(code)")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -168,7 +202,7 @@ struct CircuitPanel: View {
             .accessibilityLabel("\(progress.strikes) of 3 strikes")
         }
         .padding()
-        .background(RoundedRectangle(cornerRadius: 14).fill(Color(white: 0.1)))
+        .background(RoundedRectangle(cornerRadius: 14).fill(.ultraThinMaterial))
     }
 
     private func resultCard(_ title: String, _ subtitle: String, _ color: Color) -> some View {
@@ -193,7 +227,7 @@ struct CircuitPanel: View {
             content()
         }
         .padding()
-        .background(RoundedRectangle(cornerRadius: 16).fill(Color(white: 0.09)))
+        .background(RoundedRectangle(cornerRadius: 16).fill(.ultraThinMaterial))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(solved ? .green.opacity(0.6) : .clear, lineWidth: 2))
         .disabled(solved)
     }
@@ -394,6 +428,7 @@ struct CircuitManual: View {
                 }
             } header: { manualHeader("4 · Sequence", solved: progress.solved.contains(3)) }
         }
+        .scrollContentBackground(.hidden)
     }
 
     private func manualHeader(_ title: String, solved: Bool) -> some View {

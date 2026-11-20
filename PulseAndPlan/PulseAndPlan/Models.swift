@@ -25,6 +25,101 @@ struct AppSettings: Codable, Equatable {
     var tmdbKey = ""
     var precision: PrecisionMode = .live
     var sharingEnabled = false
+    var partnerPhone = ""
+    var alertPulses = true
+    var alertBattery = true
+    var alertArrivals = true
+    var alertNearby = true
+    var stayConnected = false
+    var services: [String] = []
+    var syncCalendar = false
+}
+
+// MARK: - Streaming services
+
+/// Services you subscribe to. None of them expose personal watch history, so we match availability via TMDB.
+enum StreamingService: String, Codable, CaseIterable, Identifiable {
+    case netflix, hboMax, disney, hulu, prime, appleTV, peacock, paramount, youtube
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .netflix: "Netflix"
+        case .hboMax: "HBO Max"
+        case .disney: "Disney+"
+        case .hulu: "Hulu"
+        case .prime: "Prime Video"
+        case .appleTV: "Apple TV+"
+        case .peacock: "Peacock"
+        case .paramount: "Paramount+"
+        case .youtube: "YouTube"
+        }
+    }
+    /// Catalog tags that count as this service (the built-in catalog predates the HBO Max rename).
+    var catalogTags: [String] { self == .hboMax ? ["HBO Max", "Max"] : [label] }
+    /// Names TMDB uses in its watch-provider list.
+    var tmdbNames: [String] {
+        switch self {
+        case .netflix: ["Netflix"]
+        case .hboMax: ["HBO Max", "Max"]
+        case .disney: ["Disney Plus"]
+        case .hulu: ["Hulu"]
+        case .prime: ["Amazon Prime Video"]
+        case .appleTV: ["Apple TV Plus", "Apple TV+", "Apple TV"]
+        case .peacock: ["Peacock", "Peacock Premium"]
+        case .paramount: ["Paramount Plus", "Paramount+"]
+        case .youtube: ["YouTube", "YouTube Premium"]
+        }
+    }
+    func searchURL(for title: String) -> URL? {
+        let q = title.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? title
+        switch self {
+        case .netflix: return URL(string: "https://www.netflix.com/search?q=\(q)")
+        case .hulu: return URL(string: "https://www.hulu.com/search?q=\(q)")
+        case .youtube: return URL(string: "https://www.youtube.com/results?search_query=\(q)")
+        case .prime: return URL(string: "https://www.amazon.com/s?k=\(q)&i=instant-video")
+        case .appleTV: return URL(string: "https://tv.apple.com/search?term=\(q)")
+        // shortcut: these services have no stable public search URL; JustWatch links into their apps. Swap in a direct URL if one is published.
+        case .hboMax, .disney, .peacock, .paramount: return URL(string: "https://www.justwatch.com/us/search?q=\(q)")
+        }
+    }
+}
+
+// MARK: - Notices & notes
+
+enum NoticeKind: String, Codable {
+    case onMyWay, custom
+}
+
+/// One-off heads-up from your partner ("On my way · 18 min").
+struct PartnerNotice: Identifiable, Codable, Hashable {
+    var id = UUID()
+    var senderId: UUID
+    var kind: NoticeKind
+    var text: String
+    var sentAt = Date()
+}
+
+enum NoteColor: String, Codable, CaseIterable, Identifiable {
+    case yellow, pink, mint, sky, lilac
+    var id: String { rawValue }
+    var color: Color {
+        switch self {
+        case .yellow: Color(red: 1, green: 0.86, blue: 0.4)
+        case .pink: Color(red: 1, green: 0.62, blue: 0.75)
+        case .mint: Color(red: 0.55, green: 0.92, blue: 0.75)
+        case .sky: Color(red: 0.56, green: 0.8, blue: 1)
+        case .lilac: Color(red: 0.8, green: 0.7, blue: 1)
+        }
+    }
+}
+
+struct SharedNote: Identifiable, Codable, Hashable {
+    var id = UUID()
+    var text: String
+    var color: NoteColor = .yellow
+    var pinned = false
+    var authorId: UUID
+    var updatedAt = Date()
 }
 
 // MARK: - Pulses
@@ -177,6 +272,7 @@ struct SharedEvent: Identifiable, Codable, Hashable {
     var start: Date
     var end: Date
     var createdBy: UUID
+    var fromCalendar: Bool?   // imported busy block from the device calendar (title is always just "Busy")
 }
 
 enum VisitTheme: String, Codable, CaseIterable, Identifiable {
@@ -201,9 +297,35 @@ struct Visit: Codable, Equatable {
 // MARK: - Games
 
 enum GameKind: String, Codable, CaseIterable, Identifiable {
-    case circuit, labyrinth
+    case circuit, labyrinth, seaBattle, fourInRow, blockDrop
     var id: String { rawValue }
-    var label: String { self == .circuit ? "Circuit Defusal" : "Blind Labyrinth" }
+    var label: String {
+        switch self {
+        case .circuit: "Circuit Defusal"
+        case .labyrinth: "Blind Labyrinth"
+        case .seaBattle: "Sea Battle"
+        case .fourInRow: "Four in a Row"
+        case .blockDrop: "Block Drop Duel"
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .circuit: "bolt.circle.fill"
+        case .labyrinth: "square.grid.3x3.fill"
+        case .seaBattle: "sailboat.fill"
+        case .fourInRow: "circle.grid.3x3.fill"
+        case .blockDrop: "square.stack.3d.down.right.fill"
+        }
+    }
+    var blurb: String {
+        switch self {
+        case .circuit: "Asymmetric: one sees the bomb, one has the manual."
+        case .labyrinth: "Asymmetric: one walks blind, one sees the map."
+        case .seaBattle: "Take turns firing at each other's hidden fleet."
+        case .fourInRow: "Drop discs and connect four first."
+        case .blockDrop: "Same falling pieces for both of you. Highest score wins."
+        }
+    }
 }
 
 enum GameRole: String, CaseIterable, Identifiable {
@@ -219,6 +341,9 @@ struct GameState: Codable, Equatable {
     var solved: Set<Int> = []
     var strikes = 0
     var switchOn = false
+    var moves: [Int] = []              // turn-based games: every move in order (A moves first)
+    var scores: [String: Int] = [:]    // keyed by GameRole.rawValue
+    var finished: [String] = []        // roles whose Block Drop board topped out
     var updatedBy: UUID
 }
 
@@ -235,6 +360,9 @@ enum SyncEvent {
     case visit(Visit)
     case presence(online: Bool)
     case status(String)
+    case notice(PartnerNotice)
+    case noteUpserted(SharedNote)
+    case noteDeleted(UUID)
 }
 
 // MARK: - Demo cities
@@ -266,9 +394,19 @@ struct DemoCity: Identifiable, Hashable {
 // MARK: - Persistence
 
 enum Persist {
-    static func load<T: Decodable>(_ key: String, default value: T) -> T {
-        guard let data = UserDefaults.standard.data(forKey: key),
-              let decoded = try? JSONDecoder().decode(T.self, from: data) else { return value }
+    static func load<T: Codable>(_ key: String, default value: T) -> T {
+        guard let data = UserDefaults.standard.data(forKey: key) else { return value }
+        return decode(data, default: value)
+    }
+
+    /// Saves from an older app version lack newer fields; overlay what was saved onto the defaults
+    /// instead of throwing everything away (which would also reset the device id).
+    static func decode<T: Codable>(_ data: Data, default value: T) -> T {
+        if let decoded = try? JSONDecoder().decode(T.self, from: data) { return decoded }
+        guard let saved = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let base = (try? JSONSerialization.jsonObject(with: JSONEncoder().encode(value))) as? [String: Any],
+              let merged = try? JSONSerialization.data(withJSONObject: base.merging(saved) { _, new in new }),
+              let decoded = try? JSONDecoder().decode(T.self, from: merged) else { return value }
         return decoded
     }
     static func save<T: Encodable>(_ value: T, _ key: String) {

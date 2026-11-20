@@ -17,6 +17,9 @@ protocol SyncService: AnyObject {
     func deleteEvent(_ id: UUID)
     func sendGame(_ state: GameState)
     func saveVisit(_ visit: Visit)
+    func sendNotice(_ notice: PartnerNotice)
+    func saveNote(_ note: SharedNote)
+    func deleteNote(_ id: UUID)
 }
 
 // MARK: - Demo / Solo Test partner
@@ -31,15 +34,19 @@ final class DemoPartnerService: SyncService {
     private let partnerName: String
     private let missedSince: Date?
     private let sendWelcomeClip: Bool
+    private let seedNote: Bool
     private var loop: Task<Void, Never>?
     private var tick = 0
-    private var battery = 82
+    private var battery = 31
+    private var charging = false
+    private var repliedNotes: Set<UUID> = []
 
-    init(city: DemoCity, partnerName: String, missedSince: Date?, sendWelcomeClip: Bool) {
+    init(city: DemoCity, partnerName: String, missedSince: Date?, sendWelcomeClip: Bool, seedNote: Bool) {
         self.city = city
         self.partnerName = partnerName
         self.missedSince = missedSince
         self.sendWelcomeClip = sendWelcomeClip
+        self.seedNote = seedNote
     }
 
     func start() {
@@ -52,6 +59,10 @@ final class DemoPartnerService: SyncService {
             }
         }
         if sendWelcomeClip { replyWithClip(after: 1, text: "Hi from \(city.name)!") }
+        if seedNote {
+            emit(.noteUpserted(SharedNote(text: "Things to do next visit:\n• Night market 🍜\n• Sunrise walk\n• Movie marathon", color: .yellow,
+                                          pinned: true, authorId: Self.partnerId)))
+        }
         loop = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
@@ -83,7 +94,14 @@ final class DemoPartnerService: SyncService {
         let wobble = sin(p * .pi) * 0.004
         let lat = city.lat + 0.012 * p + wobble
         let lng = city.lng + 0.018 * p - wobble
-        if tick % 10 == 0 { battery = p == 0 ? min(100, battery + 3) : max(6, battery - 1) }
+        // Drains while out until ~4%, then "plugs in" so the low-battery alert is easy to see in Demo mode.
+        if charging {
+            battery = min(95, battery + 3)
+            if battery >= 95 { charging = false }
+        } else if tick % 2 == 0, p > 0 {
+            battery -= 1
+            if battery <= 4 { charging = true }
+        }
         let label = p == 0 ? "At Home" : p == 1 ? "At Campus" : nil
         emit(.location(LocationShare(userId: Self.partnerId, lat: lat, lng: lng, precision: .live,
                                      battery: battery, placeLabel: label, city: city.name)))
@@ -123,6 +141,22 @@ final class DemoPartnerService: SyncService {
     func deleteEvent(_ id: UUID) {}
     func sendGame(_ state: GameState) {}
     func saveVisit(_ visit: Visit) {}
+
+    func sendNotice(_ notice: PartnerNotice) {
+        after(3) { [weak self] in
+            self?.emit(.notice(PartnerNotice(senderId: Self.partnerId, kind: .custom, text: "Yay! Can't wait to see you 💕")))
+        }
+    }
+
+    func saveNote(_ note: SharedNote) {
+        guard note.authorId != Self.partnerId, repliedNotes.insert(note.id).inserted else { return }
+        let idea = ["bring snacks 🍿", "matching hoodies", "a picnic 🧺", "karaoke night 🎤"].randomElement() ?? "hugs"
+        after(4) { [weak self] in
+            self?.emit(.noteUpserted(SharedNote(text: "Love this! Adding: \(idea)", color: .pink, authorId: Self.partnerId)))
+        }
+    }
+
+    func deleteNote(_ id: UUID) {}
 
     private func replyWithClip(after seconds: Double, text: String) {
         let avatar = partnerName

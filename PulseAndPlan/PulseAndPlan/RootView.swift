@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 
 @main
@@ -13,33 +14,96 @@ struct PulseAndPlanApp: App {
                 .onAppear { state.start() }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { state.resumeSharingIfNeeded() }
-            if phase == .background { state.didEnterBackground() }
+            // .inactive (Control Center, app switcher peek) is transient; only flip on real transitions.
+            if phase == .active { state.setActive(true) }
+            if phase == .background { state.setActive(false) }
         }
     }
 }
 
 struct RootView: View {
     @Environment(AppState.self) private var state
+    @State private var tab: AppTab = .pulse
+    @State private var showSplash = true
 
     var body: some View {
-        VStack(spacing: 0) {
-            PartnerHeader()
-            TabView {
-                PulseTab().tabItem { Label("Pulse", systemImage: "heart.circle.fill") }
-                MapTab().tabItem { Label("Map", systemImage: "map.fill") }
-                WatchTab().tabItem { Label("Watch", systemImage: "popcorn.fill") }
-                PlayTab().tabItem { Label("Play", systemImage: "gamecontroller.fill") }
-                PlanTab().tabItem { Label("Plan", systemImage: "calendar") }
+        @Bindable var state = state
+        ZStack {
+            ThemedBackground()
+            VStack(spacing: 0) {
+                PartnerHeader()
+                ZStack {
+                    // Every tab stays alive (games, map position, half-written notes) and cross-fades in.
+                    ForEach(AppTab.allCases) { item in
+                        let active = item == tab
+                        content(for: item)
+                            .environment(\.isActiveTab, active)
+                            .opacity(active ? 1 : 0)
+                            .scaleEffect(active ? 1 : 0.95)
+                            .offset(y: active ? 0 : 16)
+                            .blur(radius: active ? 0 : 6)
+                            .allowsHitTesting(active)
+                            .accessibilityHidden(!active)
+                    }
+                }
+                .frame(maxHeight: .infinity)
+                TabBar(selection: $tab)
             }
-            .tint(.pink)
-        }
-        .background(Color.black)
-        .overlay {
+            if let toast = state.toast {
+                VStack {
+                    ToastView(text: toast)
+                    Spacer()
+                }
+                .padding(.top, 64)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .zIndex(5)
+            }
             if let movie = state.match {
                 MatchOverlay(movie: movie) { state.match = nil }
+                    .transition(.opacity)
+                    .zIndex(6)
+            }
+            if showSplash {
+                SplashView()
+                    .transition(.asymmetric(insertion: .identity, removal: .opacity.combined(with: .scale(scale: 1.3))))
+                    .zIndex(10)
             }
         }
+        .tint(state.theme.accent)
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: state.toast)
+        .animation(.easeInOut(duration: 0.3), value: state.match)
+        .sheet(item: $state.messageDraft) { MessageSheet(draft: $0, phone: state.settings.partnerPhone) }
+        .task {
+            try? await Task.sleep(for: .seconds(1.6))
+            withAnimation(.easeInOut(duration: 0.6)) { showSplash = false }
+        }
+    }
+
+    @ViewBuilder
+    private func content(for tab: AppTab) -> some View {
+        switch tab {
+        case .pulse: PulseTab()
+        case .map: MapTab()
+        case .watch: WatchTab()
+        case .play: PlayTab()
+        case .plan: PlanTab()
+        }
+    }
+}
+
+struct ToastView: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.subheadline.weight(.semibold))
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18))
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(.tint.opacity(0.5)))
+            .padding(.horizontal, 24)
+            .accessibilityAddTraits(.updatesFrequently)
     }
 }
 
@@ -56,7 +120,8 @@ struct PartnerHeader: View {
                 Text(s.partnerAvatar)
                     .font(.system(size: 28))
                     .frame(width: 46, height: 46)
-                    .background(Circle().fill(.white.opacity(0.08)))
+                    .background(Circle().fill(.ultraThinMaterial))
+                    .overlay(Circle().stroke(.tint.opacity(0.6), lineWidth: 2))
                 Circle()
                     .fill(state.partnerOnline ? Color.green : Color.gray)
                     .frame(width: 12, height: 12)
@@ -71,7 +136,7 @@ struct PartnerHeader: View {
                         Text("DEMO")
                             .font(.caption2.bold())
                             .padding(.horizontal, 5)
-                            .background(Capsule().fill(.purple.opacity(0.45)))
+                            .background(Capsule().fill(.tint.opacity(0.4)))
                     }
                 }
                 HStack(spacing: 10) {
@@ -84,12 +149,13 @@ struct PartnerHeader: View {
                     }
                     if let battery = state.partnerLocation?.battery {
                         Label("\(battery)%", systemImage: batterySymbol(battery))
+                            .foregroundStyle(battery <= 15 ? .red : .secondary)
                     }
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 if let label = partnerStatus {
-                    Text(label).font(.caption2.weight(.semibold)).foregroundStyle(.pink)
+                    Text(label).font(.caption2.weight(.semibold)).foregroundStyle(.tint)
                 }
             }
             Spacer(minLength: 0)
@@ -99,10 +165,20 @@ struct PartnerHeader: View {
             } label: {
                 Image(systemName: "heart.fill")
                     .font(.title2)
-                    .foregroundStyle(.pink)
+                    .foregroundStyle(.tint)
                     .symbolEffect(.bounce, value: state.lastIncomingPulse?.id)
             }
             .accessibilityLabel("Send a heartbeat")
+            Menu {
+                Button { Task { _ = await state.sendOnMyWay() } } label: { Label("I'm on my way", systemImage: "car.fill") }
+                Button {
+                    Task { state.textPartner(await state.sendOnMyWay() + " 🚗") }
+                } label: { Label("On my way + iMessage", systemImage: "message.fill") }
+                Button { state.textPartner("Thinking of you 💕") } label: { Label("Text \(s.partnerName)", systemImage: "bubble.left.and.text.bubble.right.fill") }
+            } label: {
+                Image(systemName: "paperplane.fill").font(.title3).foregroundStyle(.secondary)
+            }
+            .accessibilityLabel("Quick messages")
             Button { showSettings = true } label: {
                 Image(systemName: "gearshape.fill").font(.title3).foregroundStyle(.secondary)
             }
@@ -146,6 +222,12 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section {
+                    NavigationLink { AppearanceView() } label: {
+                        Label("Theme & background", systemImage: "paintpalette.fill")
+                    }
+                }
+
+                Section {
                     Picker("Mode", selection: $state.settings.mode) {
                         ForEach(SyncMode.allCases) { Text($0.label).tag($0) }
                     }
@@ -161,7 +243,7 @@ struct SettingsView: View {
                             ForEach(DemoCity.all) { Text($0.name).tag($0.name) }
                         }
                     } header: { Text("Demo partner") } footer: {
-                        Text("Simulates a connected partner: a moving pin, pulse replies, movie matches and video replies.")
+                        Text("Simulates a connected partner: a moving pin, pulse replies, movie matches, notes, video replies and a draining battery.")
                     }
                 } else {
                     Section {
@@ -180,6 +262,11 @@ struct SettingsView: View {
                             Button("Join") { state.settings.coupleCode = joinCode.uppercased() }
                                 .disabled(joinCode.count != 6)
                         }
+                        if !state.settings.coupleCode.isEmpty {
+                            Button("Send code via iMessage") {
+                                state.textPartner("Join me on Pulse & Plan 💕 Our couple code: \(state.settings.coupleCode)")
+                            }
+                        }
                     } header: { Text("Live pair") } footer: {
                         Text("One of you creates a code and shares it; the other joins with it.")
                     }
@@ -190,6 +277,21 @@ struct SettingsView: View {
                     TextField("Your avatar emoji", text: $state.settings.myAvatar)
                     TextField("Partner's name", text: $state.settings.partnerName)
                     TextField("Partner's avatar emoji", text: $state.settings.partnerAvatar)
+                    TextField("Partner's phone or iMessage email", text: $state.settings.partnerPhone)
+                        .keyboardType(.emailAddress)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                }
+
+                Section {
+                    Toggle("Pulses while I'm away", isOn: $state.settings.alertPulses)
+                    Toggle("Low battery (15% and 5%)", isOn: $state.settings.alertBattery)
+                    Toggle("Arrives at a saved place", isOn: $state.settings.alertArrivals)
+                    Toggle("Gets within 1 km", isOn: $state.settings.alertNearby)
+                    Toggle("Stay connected in background", isOn: $state.settings.stayConnected)
+                    Button("Send test alerts") { state.sendTestAlerts() }
+                } header: { Text("Alerts about \(state.settings.partnerName)") } footer: {
+                    Text("iOS only lets this app run in the background while it shares your location, and never plays custom vibrations in the background, so away pulses arrive as a notification and wait in Missed Pulses. \"Stay connected\" keeps location running even when you sit still (uses more battery). Installed through LiveContainer, iOS uses LiveContainer's own permissions, so background alerts need a standalone install (Sideloadly or AltStore).")
                 }
 
                 Section("Time zones") {
@@ -214,20 +316,24 @@ struct SettingsView: View {
                 } header: { Text("Location") }
 
                 Section {
-                    SecureField("TMDB API key (optional)", text: $state.settings.tmdbKey)
-                    Button(loadingTMDB ? "Loading…" : "Load trending titles") { loadTMDB() }
+                    ServicePicker(selection: $state.settings.services)
+                    SecureField("TMDB API key (free at themoviedb.org)", text: $state.settings.tmdbKey)
+                    Button(loadingTMDB ? "Loading…" : "Load titles from our services") { loadTMDB() }
                         .disabled(state.settings.tmdbKey.isEmpty || loadingTMDB)
                     if !tmdbMessage.isEmpty { Text(tmdbMessage).font(.footnote).foregroundStyle(.secondary) }
-                } header: { Text("Movies") } footer: {
-                    Text("The built-in catalog works without a key. A key adds this week's trending titles with posters.")
+                } header: { Text("Movies & streaming") } footer: {
+                    Text("Netflix, HBO Max, Disney+, Hulu and YouTube don't offer apps a way to read your watch history, so pick the services you have: the Watch deck shows what's on them (availability from TMDB/JustWatch) and each card opens the title in that app.")
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(.black.opacity(0.4))
             .navigationTitle("Settings")
             .toolbar { Button("Done") { dismiss() } }
             .onChange(of: state.settings.demoCity) { _, city in
                 state.settings.partnerTimeZone = DemoCity.named(city).timeZone
             }
         }
+        .presentationBackground(.ultraThinMaterial)
     }
 
     private var timeZoneOptions: some View {
@@ -249,11 +355,114 @@ struct SettingsView: View {
         Task {
             defer { loadingTMDB = false }
             do {
-                let movies = try await TMDB.trending(apiKey: state.settings.tmdbKey)
+                let services = state.settings.services.compactMap(StreamingService.init(rawValue:))
+                let movies = services.isEmpty
+                    ? try await TMDB.trending(apiKey: state.settings.tmdbKey)
+                    : try await TMDB.onServices(services, apiKey: state.settings.tmdbKey)
                 state.extraMovies = movies
-                tmdbMessage = "Added \(movies.count) trending titles to your deck."
+                tmdbMessage = "Added \(movies.count) titles to your deck."
             } catch {
                 tmdbMessage = "Couldn't load from TMDB: \(error.localizedDescription)"
+            }
+        }
+    }
+}
+
+struct ServicePicker: View {
+    @Binding var selection: [String]
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 8)], spacing: 8) {
+            ForEach(StreamingService.allCases) { service in
+                let on = selection.contains(service.rawValue)
+                Button {
+                    if on { selection.removeAll { $0 == service.rawValue } } else { selection.append(service.rawValue) }
+                } label: {
+                    Text(service.label)
+                        .font(.caption.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(Capsule().fill(on ? AnyShapeStyle(.tint) : AnyShapeStyle(.white.opacity(0.1))))
+                        .foregroundStyle(on ? .black : .primary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+// MARK: - Appearance
+
+struct AppearanceView: View {
+    @Environment(AppState.self) private var state
+    @State private var photoItem: PhotosPickerItem?
+
+    var body: some View {
+        @Bindable var state = state
+        Form {
+            Section("Theme") {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 14) {
+                        ForEach(ThemePreset.allCases) { preset in
+                            let selected = state.theme.preset == preset && state.theme.customAccent == nil
+                            Button {
+                                withAnimation(.spring) {
+                                    state.theme.preset = preset
+                                    state.theme.customAccent = nil
+                                }
+                            } label: {
+                                VStack(spacing: 6) {
+                                    Circle()
+                                        .fill(LinearGradient(colors: preset.palette, startPoint: .topLeading, endPoint: .bottomTrailing))
+                                        .frame(width: 54, height: 54)
+                                        .overlay(Circle().fill(preset.accent).frame(width: 18, height: 18))
+                                        .overlay(Circle().stroke(selected ? Color.white : .clear, lineWidth: 3))
+                                    Text(preset.label).font(.caption2)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("\(preset.label) theme")
+                            .accessibilityAddTraits(selected ? .isSelected : [])
+                        }
+                    }
+                    .padding(.vertical, 6)
+                }
+                ColorPicker("Custom accent color", selection: Binding(
+                    get: { state.theme.accent },
+                    set: { state.theme.customAccent = RGBA($0) }
+                ), supportsOpacity: false)
+            }
+
+            Section {
+                Picker("Effect", selection: $state.theme.effect) {
+                    ForEach(BackgroundEffect.allCases) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.inline)
+                .labelsHidden()
+                let photoLabel = state.backgroundImage == nil ? "Choose a photo" : "Change photo"
+                PhotosPicker(selection: $photoItem, matching: .images) {
+                    Label(photoLabel, systemImage: "photo.on.rectangle")
+                }
+                if state.theme.effect == .photo {
+                    VStack(alignment: .leading) {
+                        Text("Dim").font(.caption)
+                        Slider(value: $state.theme.photoDim, in: 0...0.85)
+                        Text("Blur").font(.caption)
+                        Slider(value: $state.theme.photoBlur, in: 0...20)
+                    }
+                }
+            } header: { Text("Background") }
+        }
+        .scrollContentBackground(.hidden)
+        .background(ThemedBackground().opacity(0.9))
+        .navigationTitle("Theme & background")
+        .onChange(of: photoItem) { _, item in
+            guard let item else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self) { state.setBackgroundPhoto(data) }
+                photoItem = nil
             }
         }
     }
@@ -262,6 +471,7 @@ struct SettingsView: View {
 // MARK: - Match overlay
 
 struct MatchOverlay: View {
+    @Environment(AppState.self) private var state
     let movie: Movie
     let dismiss: () -> Void
     @State private var appear = false
@@ -269,26 +479,35 @@ struct MatchOverlay: View {
     var body: some View {
         ZStack {
             Color.black.opacity(0.8).ignoresSafeArea().onTapGesture(perform: dismiss)
-            ForEach(0..<20, id: \.self) { i in
-                let angle = Double(i) / 20 * 2 * .pi
+            ForEach(0..<24, id: \.self) { i in
+                let angle = Double(i) / 24 * 2 * .pi
                 Text(["🎉", "❤️", "🍿", "✨"][i % 4])
                     .font(.largeTitle)
-                    .offset(x: appear ? cos(angle) * 170 : 0, y: appear ? sin(angle) * 300 : 0)
+                    .rotationEffect(.degrees(appear ? Double(i * 40) : 0))
+                    .offset(x: appear ? cos(angle) * 180 : 0, y: appear ? sin(angle) * 320 : 0)
                     .opacity(appear ? 0 : 1)
-                    .animation(.easeOut(duration: 1.4), value: appear)
+                    .animation(.easeOut(duration: 1.5), value: appear)
             }
             VStack(spacing: 16) {
                 Text("It's a Match!")
-                    .font(.system(size: 40, weight: .black, design: .rounded))
-                    .foregroundStyle(LinearGradient(colors: [.pink, .orange], startPoint: .leading, endPoint: .trailing))
-                PosterView(movie: movie).frame(width: 180, height: 260)
+                    .font(.system(size: 42, weight: .black, design: .rounded))
+                    .foregroundStyle(LinearGradient(colors: [state.theme.accent, .orange], startPoint: .leading, endPoint: .trailing))
+                PosterView(movie: movie)
+                    .frame(width: 180, height: 260)
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
+                    .rotation3DEffect(.degrees(appear ? 0 : 90), axis: (x: 0, y: 1, z: 0))
                 Text("You both want to watch \(movie.title). Added to Tonight's Queue.")
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 40)
-                Button("Yay!", action: dismiss)
-                    .buttonStyle(.borderedProminent)
-                    .tint(.pink)
+                HStack {
+                    Button("Text \(state.settings.partnerName)") {
+                        state.textPartner("It's a match! 🍿 Watch \(movie.title) together tonight?")
+                        dismiss()
+                    }
+                    .buttonStyle(.bordered)
+                    Button("Yay!", action: dismiss).buttonStyle(.borderedProminent)
+                }
             }
             .scaleEffect(appear ? 1 : 0.6)
             .animation(.spring(response: 0.5, dampingFraction: 0.6), value: appear)

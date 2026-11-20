@@ -34,6 +34,8 @@ struct PlanTab: View {
     @State private var day = Date()
     @State private var editingVisit = false
     @State private var newEventStart: Date?
+    @State private var section = 0
+    @State private var importing = false
 
     var body: some View {
         ScrollView {
@@ -42,15 +44,52 @@ struct PlanTab: View {
                     .onTapGesture { editingVisit = true }
                     .accessibilityAddTraits(.isButton)
                     .accessibilityHint("Edit the visit")
-                timeline
-                eventsList
+                Picker("Section", selection: $section.animation(.spring)) {
+                    Text("Calendar").tag(0)
+                    Text("Notes (\(state.notes.count))").tag(1)
+                }
+                .pickerStyle(.segmented)
+                Group {
+                    if section == 0 {
+                        VStack(alignment: .leading, spacing: 18) {
+                            calendarBar
+                            timeline
+                            eventsList
+                        }
+                    } else {
+                        NotesBoard()
+                    }
+                }
+                .transition(.asymmetric(insertion: .move(edge: section == 0 ? .leading : .trailing).combined(with: .opacity),
+                                        removal: .opacity))
             }
             .padding()
         }
-        .background(Color.black)
         .sheet(isPresented: $editingVisit) { VisitEditor(visit: state.visit) }
         .sheet(item: Binding(get: { newEventStart.map(IdentifiedDate.init) }, set: { newEventStart = $0?.date })) {
             EventEditor(start: $0.date)
+        }
+    }
+
+    // MARK: Device calendar
+
+    private var calendarBar: some View {
+        HStack {
+            Button {
+                importing = true
+                Task {
+                    let count = await state.importCalendarBusy()
+                    importing = false
+                    state.showToast(count.map { "Shared \($0) busy blocks from your calendar (titles stay private)." }
+                                    ?? "Calendar access is off. Turn it on in iOS Settings → Pulse & Plan.")
+                }
+            } label: {
+                Label(importing ? "Reading calendar…" : state.settings.syncCalendar ? "Refresh my busy times" : "Share my busy times",
+                      systemImage: "calendar.badge.clock")
+            }
+            .buttonStyle(.bordered)
+            .disabled(importing)
+            Spacer()
         }
     }
 
@@ -156,7 +195,6 @@ struct PlanTab: View {
                 Spacer()
                 Button { newEventStart = Date() } label: { Label("Add", systemImage: "plus") }
                     .buttonStyle(.borderedProminent)
-                    .tint(.pink)
             }
             if upcoming.isEmpty {
                 Text("Nothing planned yet. Add a date night, a call, or the hours you're busy.")
@@ -174,11 +212,21 @@ struct PlanTab: View {
                     .font(.caption)
                     Spacer()
                     Text(event.kind.label).font(.caption2.bold()).foregroundStyle(event.kind.color)
+                    if event.fromCalendar != true {
+                        Button { Task { await state.addToCalendar(event) } } label: { Image(systemName: "calendar.badge.plus") }
+                            .accessibilityLabel("Add \(event.title) to my calendar")
+                        Button {
+                            let when = event.start.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened, timeZone: state.partnerTZ))
+                            state.textPartner("📅 \(event.title) · \(when) your time")
+                        } label: { Image(systemName: "message") }
+                            .accessibilityLabel("Text \(state.settings.partnerName) about \(event.title)")
+                    }
                     Button(role: .destructive) { state.deleteEvent(event) } label: { Image(systemName: "trash") }
                         .accessibilityLabel("Delete \(event.title)")
                 }
+                .buttonStyle(.borderless)
                 .padding(10)
-                .background(RoundedRectangle(cornerRadius: 12).fill(Color(white: 0.09)))
+                .background(RoundedRectangle(cornerRadius: 12).fill(.ultraThinMaterial))
             }
         }
     }

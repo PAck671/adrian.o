@@ -2,6 +2,7 @@ name: Build unsigned IPA
 
 on:
   push:
+    branches: ["**"] # branches only: release tags would otherwise trigger a duplicate macOS build
     paths:
       - "PulseAndPlan/**"
       - ".github/workflows/build-ipa.yml"

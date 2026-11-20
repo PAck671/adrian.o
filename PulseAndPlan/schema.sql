@@ -1,4 +1,5 @@
--- Pulse & Plan — Supabase schema. Paste into the Supabase SQL editor and run once.
+-- Pulse & Plan — Supabase schema. Paste into the Supabase SQL editor and run. Re-running is safe
+-- (it also upgrades a v1.0 database).
 -- shortcut: the app uses only the anon key (no Supabase Auth), so the 6-character couple code is
 -- the only secret and the policies below let any anon client read/write. Add Supabase Auth and
 -- per-user RLS before sharing the anon key beyond the two of you.
@@ -50,7 +51,7 @@ create table if not exists movie_swipes (
 create table if not exists game_sessions (
   couple_code  text not null references couples(code) on delete cascade,
   game_code    text not null check (char_length(game_code) = 4),
-  game         text not null check (game in ('circuit', 'labyrinth')),
+  game         text not null check (game in ('circuit', 'labyrinth', 'seaBattle', 'fourInRow', 'blockDrop')),
   state        jsonb not null default '{}'::jsonb,
   updated_by   uuid,
   updated_at   timestamptz not null default now(),
@@ -81,14 +82,46 @@ create table if not exists locations (
   primary key (couple_code, user_id)
 );
 
+create table if not exists notes (
+  id           uuid primary key default gen_random_uuid(),
+  couple_code  text not null references couples(code) on delete cascade,
+  author_id    uuid not null,
+  text         text not null,
+  color        text not null default 'yellow',
+  pinned       boolean not null default false,
+  updated_at   timestamptz not null default now()
+);
+
+create table if not exists notices (
+  id           uuid primary key default gen_random_uuid(),
+  couple_code  text not null references couples(code) on delete cascade,
+  sender_id    uuid not null,
+  kind         text not null default 'custom',
+  text         text not null,
+  created_at   timestamptz not null default now()
+);
+
+-- v1.1 upgrade for databases created with the v1.0 schema (safe to run on a fresh one too).
+alter table game_sessions drop constraint if exists game_sessions_game_check;
+alter table game_sessions add constraint game_sessions_game_check
+  check (game in ('circuit', 'labyrinth', 'seaBattle', 'fourInRow', 'blockDrop'));
+
 -- Realtime (postgres_changes) for every table the app listens to.
-alter publication supabase_realtime add table couples, pulses, videos, movie_swipes, game_sessions, events, locations;
+do $$
+declare t text;
+begin
+  foreach t in array array['couples','pulses','videos','movie_swipes','game_sessions','events','locations','notes','notices'] loop
+    if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = t) then
+      execute format('alter publication supabase_realtime add table %I', t);
+    end if;
+  end loop;
+end $$;
 
 -- Row Level Security: on, with anon-only policies (see shortcut note at the top).
 do $$
 declare t text;
 begin
-  foreach t in array array['couples','pulses','videos','movie_swipes','game_sessions','events','locations'] loop
+  foreach t in array array['couples','pulses','videos','movie_swipes','game_sessions','events','locations','notes','notices'] loop
     execute format('alter table %I enable row level security', t);
     execute format('drop policy if exists "anon couple access" on %I', t);
     execute format('create policy "anon couple access" on %I for all to anon using (true) with check (true)', t);

@@ -34,7 +34,7 @@ final class SupabaseSyncService: SyncService {
     private var stopped = false
     private var topic: String { "realtime:couple-\(code)" }
 
-    private static let tables = ["couples", "pulses", "videos", "movie_swipes", "game_sessions", "events", "locations"]
+    private static let tables = ["couples", "pulses", "videos", "movie_swipes", "game_sessions", "events", "locations", "notes", "notices"]
 
     init?(settings: AppSettings) {
         guard Config.isSupabaseConfigured, let url = URL(string: Config.SUPABASE_URL),
@@ -82,6 +82,9 @@ final class SupabaseSyncService: SyncService {
             }
             for row in try await rows("locations", ["user_id": "neq.\(me.uuidString)"]) {
                 if let l = location(row) { emit(.location(l)) }
+            }
+            for row in try await rows("notes", ["order": "updated_at.asc"]) {
+                if let n = note(row) { emit(.noteUpserted(n)) }
             }
             emit(.status("Paired · code \(code)"))
         } catch {
@@ -171,6 +174,22 @@ final class SupabaseSyncService: SyncService {
         write("PATCH", "couples", query: ["code": "eq.\(code)"], body: [
             "visit_date": Self.iso(v.date), "visit_destination": v.destination, "visit_theme": v.theme.rawValue,
         ])
+    }
+
+    func sendNotice(_ n: PartnerNotice) {
+        write("POST", "notices", body: ["id": n.id.uuidString, "couple_code": code, "sender_id": me.uuidString,
+                                        "kind": n.kind.rawValue, "text": n.text, "created_at": Self.iso(n.sentAt)])
+    }
+
+    func saveNote(_ n: SharedNote) {
+        upsert("notes", conflict: "id", [
+            "id": n.id.uuidString, "couple_code": code, "author_id": n.authorId.uuidString, "text": n.text,
+            "color": n.color.rawValue, "pinned": n.pinned, "updated_at": Self.iso(n.updatedAt),
+        ])
+    }
+
+    func deleteNote(_ id: UUID) {
+        write("DELETE", "notes", query: ["id": "eq.\(id.uuidString)"], body: nil)
     }
 
     private func upsert(_ table: String, conflict: String, _ body: Row) {
@@ -333,7 +352,9 @@ final class SupabaseSyncService: SyncService {
             guard let change = payload["data"] as? Row, let table = change["table"] as? String,
                   let type = change["type"] as? String else { return }
             if type == "DELETE" {
-                if table == "events", let id = uuid((change["old_record"] as? Row)?["id"]) { emit(.eventDeleted(id)) }
+                guard let id = uuid((change["old_record"] as? Row)?["id"]) else { return }
+                if table == "events" { emit(.eventDeleted(id)) }
+                if table == "notes" { emit(.noteDeleted(id)) }
             } else if let record = change["record"] as? Row {
                 route(table, record)
             }
@@ -360,9 +381,25 @@ final class SupabaseSyncService: SyncService {
             if let g = game(r), g.updatedBy != me { emit(.game(g)) }
         case "couples":
             if let v = visit(r) { emit(.visit(v)) }
+        case "notes":
+            if let n = note(r) { emit(.noteUpserted(n)) }
+        case "notices":
+            if let n = notice(r), n.senderId != me, Date().timeIntervalSince(n.sentAt) < 600 { emit(.notice(n)) }
         default:
             break
         }
+    }
+
+    private func note(_ r: Row) -> SharedNote? {
+        guard let id = uuid(r["id"]), let author = uuid(r["author_id"]), let text = r["text"] as? String else { return nil }
+        return SharedNote(id: id, text: text, color: (r["color"] as? String).flatMap(NoteColor.init(rawValue:)) ?? .yellow,
+                          pinned: r["pinned"] as? Bool ?? false, authorId: author, updatedAt: date(r["updated_at"]) ?? Date())
+    }
+
+    private func notice(_ r: Row) -> PartnerNotice? {
+        guard let id = uuid(r["id"]), let sender = uuid(r["sender_id"]), let text = r["text"] as? String else { return nil }
+        return PartnerNotice(id: id, senderId: sender, kind: (r["kind"] as? String).flatMap(NoticeKind.init(rawValue:)) ?? .custom,
+                             text: text, sentAt: date(r["created_at"]) ?? Date())
     }
 
     // MARK: Row decoding

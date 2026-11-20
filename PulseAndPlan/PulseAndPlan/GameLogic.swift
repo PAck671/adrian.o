@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Deterministic RNG: same code → same puzzle on every phone, OS version and launch.
 /// Hand-rolled (FNV-1a seed + SplitMix64) because Swift's Hasher is randomly seeded per process.
-struct SeededRandom {
+struct SeededRandom: RandomNumberGenerator {
     private var state: UInt64
 
     init(code: String, salt: String) {

@@ -3,29 +3,49 @@ import SwiftUI
 struct WatchTab: View {
     @Environment(AppState.self) private var state
     @State private var section = 0
+    @AppStorage("onlyOurServices") private var onlyOurs = false
 
     var body: some View {
         VStack(spacing: 12) {
-            Picker("Section", selection: $section) {
+            Picker("Section", selection: $section.animation(.spring)) {
                 Text("Swipe").tag(0)
                 Text("Tonight's Queue (\(state.queue.count))").tag(1)
             }
             .pickerStyle(.segmented)
             .padding(.horizontal)
-            if section == 0 { SwipeDeck() } else { QueueList() }
+            if section == 0, !state.settings.services.isEmpty {
+                Toggle(isOn: $onlyOurs.animation(.spring)) {
+                    Label("Only on our services", systemImage: "tv.and.mediabox")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .padding(.horizontal, 24)
+            }
+            Group {
+                if section == 0 { SwipeDeck() } else { QueueList() }
+            }
+            .transition(.asymmetric(insertion: .move(edge: section == 0 ? .leading : .trailing).combined(with: .opacity),
+                                    removal: .opacity))
         }
         .padding(.top)
-        .background(Color.black)
     }
+}
+
+/// Catalog tags for the services you picked in Settings.
+@MainActor
+func ourServiceTags(_ state: AppState) -> Set<String> {
+    Set(state.settings.services.compactMap(StreamingService.init(rawValue:)).flatMap(\.catalogTags))
 }
 
 struct SwipeDeck: View {
     @Environment(AppState.self) private var state
     @State private var offset: CGSize = .zero
     @State private var flinging = false
+    @AppStorage("onlyOurServices") private var onlyOurs = false
 
     var body: some View {
-        let deck = Array(state.deck.prefix(3))
+        let tags = ourServiceTags(state)
+        let filtered = onlyOurs && !tags.isEmpty ? state.deck.filter { !tags.isDisjoint(with: $0.streaming) } : state.deck
+        let deck = Array(filtered.prefix(3))
         VStack(spacing: 16) {
             ZStack {
                 if deck.isEmpty {
@@ -34,7 +54,7 @@ struct SwipeDeck: View {
                     } description: {
                         Text("Start over, or add a TMDB key in Settings for trending titles.")
                     } actions: {
-                        Button("Start over") { state.mySwipes = [:] }.buttonStyle(.borderedProminent).tint(.pink)
+                        Button("Start over") { state.mySwipes = [:] }.buttonStyle(.borderedProminent)
                     }
                 }
                 ForEach(Array(deck.enumerated()).reversed(), id: \.element.id) { index, movie in
@@ -87,7 +107,7 @@ struct SwipeDeck: View {
                 .font(.title.bold())
                 .foregroundStyle(color)
                 .frame(width: 68, height: 68)
-                .background(Circle().fill(Color(white: 0.12)))
+                .background(Circle().fill(.ultraThinMaterial))
                 .overlay(Circle().stroke(color.opacity(0.5), lineWidth: 2))
         }
         .accessibilityLabel(label)
@@ -144,21 +164,33 @@ struct MovieCard: View {
                     .foregroundStyle(.secondary)
                 if !movie.streaming.isEmpty {
                     HStack {
-                        ForEach(movie.streaming, id: \.self) { service in
-                            Text(service)
-                                .font(.caption.bold())
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .background(Capsule().fill(.white.opacity(0.12)))
+                        ForEach(movie.streaming, id: \.self) { tag in
+                            let service = StreamingService.allCases.first { $0.catalogTags.contains(tag) }
+                            if let url = service?.searchURL(for: movie.title) {
+                                Link(destination: url) {
+                                    Label(tag, systemImage: "play.fill")
+                                        .font(.caption.bold())
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Capsule().fill(.tint.opacity(0.3)))
+                                }
+                                .accessibilityLabel("Watch on \(tag)")
+                            } else {
+                                Text(tag)
+                                    .font(.caption.bold())
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Capsule().fill(.white.opacity(0.12)))
+                            }
                         }
                     }
                 }
             }
             .padding()
         }
-        .background(RoundedRectangle(cornerRadius: 22).fill(Color(white: 0.1)))
+        .background(RoundedRectangle(cornerRadius: 22).fill(.ultraThinMaterial))
         .shadow(color: .black.opacity(0.5), radius: 10, y: 4)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
     }
 }
 
