@@ -298,7 +298,7 @@ struct VideoComposer: View {
                         .foregroundStyle(.secondary))
                 }
             }
-            .frame(width: 300, height: 300)
+            .aspectRatio(1, contentMode: .fit) .containerRelativeFrame(.horizontal) { width, _ in min(width * 0.8, 380) }
             .clipShape(Circle())
             .overlay {
                 TimelineView(.animation(paused: !camera.isRecording)) { context in

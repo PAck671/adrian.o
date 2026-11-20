@@ -13,6 +13,7 @@ struct LabyrinthPlayer: View {
     private var escaped: Bool { progress.solved.contains(0) }
 
     var body: some View {
+        ScrollView {
         VStack(spacing: 16) {
             HStack {
                 Label(progress.switchOn ? "Exit unlocked" : "Exit locked",
@@ -37,6 +38,7 @@ struct LabyrinthPlayer: View {
             Button("Reset room", role: .destructive, action: reset)
         }
         .padding()
+        } // short screens (SE) scroll instead of clipping the maze or d-pad
     }
 
     private func marker(_ cell: Int) -> String? {
@@ -49,7 +51,7 @@ struct LabyrinthPlayer: View {
     private var dPad: some View {
         VStack(spacing: 8) {
             arrow(.up)
-            HStack(spacing: 56) {
+            HStack(spacing: 50) {
                 arrow(.left)
                 arrow(.right)
             }
@@ -61,7 +63,7 @@ struct LabyrinthPlayer: View {
         Button { move(direction) } label: {
             Image(systemName: direction.symbol)
                 .font(.title.bold())
-                .frame(width: 64, height: 64)
+                .frame(width: 58, height: 58)
                 .surface(Circle())
         }
         .buttonStyle(.plain)
@@ -117,6 +119,7 @@ struct LabyrinthGuide: View {
 
     var body: some View {
         let progress = state.gameState(code: code, game: .labyrinth)
+        ScrollView {
         VStack(spacing: 16) {
             Text(progress.solved.contains(0) ? "They escaped! 🎉" : "Guide \(state.settings.partnerName) to the 🔌 switch, then the 🚪 exit.")
                 .font(.headline)
@@ -148,6 +151,7 @@ struct LabyrinthGuide: View {
             Spacer()
         }
         .padding()
+        } // short screens (SE) scroll instead of clipping the maze or d-pad
     }
 }
 

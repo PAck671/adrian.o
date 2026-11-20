@@ -11,6 +11,11 @@ struct MapTab: View {
     @State private var glideUntil = Date.distantPast
     @State private var gliding = false
     @Namespace private var pillSpace
+    @AppStorage("mapCardCollapsed") private var collapsed = false
+    @AppStorage("mapCardCollapseChosen") private var collapseChosen = false
+    @AppStorage("mapShowPlaces") private var showPlacePins = true
+    @AppStorage("mapShowThread") private var showThread = true
+    @AppStorage("mapShowHalo") private var showHalo = true
 
     var body: some View {
         let partner = state.partnerLocation
@@ -22,9 +27,11 @@ struct MapTab: View {
                 let me = state.myCoordinate.map { myGlide.position(at: now) ?? $0 }
                 let them = partner?.coordinate.map { partnerGlide.position(at: now) ?? $0 }
                 Map(position: $camera) {
-                    ForEach(state.savedPlaces) { place in
-                        Annotation(place.name, coordinate: place.coordinate) {
-                            Text(place.emoji).font(.title3).padding(4).background(Circle().fill(.black.opacity(0.6)))
+                    if showPlacePins {
+                        ForEach(state.savedPlaces) { place in
+                            Annotation(place.name, coordinate: place.coordinate) {
+                                Text(place.emoji).font(.title3).padding(4).background(Circle().fill(.black.opacity(0.6)))
+                            }
                         }
                     }
                     if let me {
@@ -42,7 +49,7 @@ struct MapTab: View {
                             MapCircle(center: them, radius: 3000)
                                 .foregroundStyle(.tint.opacity(0.15))
                                 .stroke(.tint.opacity(0.6), lineWidth: 1)
-                        } else if let accuracy = partner?.accuracy, accuracy > 15 {
+                        } else if showHalo, let accuracy = partner?.accuracy, accuracy > 15 {
                             // Find My-style halo: how sure the GPS is about this spot.
                             MapCircle(center: them, radius: min(accuracy, 500))
                                 .foregroundStyle(.tint.opacity(0.12))
@@ -51,7 +58,7 @@ struct MapTab: View {
                             AvatarPin(isMe: false, color: state.theme.accent,
                                       badge: partner?.placeLabel ?? partner?.activity.map { "\($0.emoji) \($0.label)" })
                         }
-                        if let me {
+                        if showThread, let me {
                             MapPolyline(coordinates: [me, them], contourStyle: .geodesic)
                                 .stroke(Color.redThread.opacity(0.9),
                                         style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
@@ -73,12 +80,30 @@ struct MapTab: View {
                 startGlide(&myGlide, to: me)
             }
 
-            VStack {
-                precisionPill
-                Spacer()
-                infoCard
+            GeometryReader { geo in
+                VStack(spacing: 10) {
+                    HStack(alignment: .top, spacing: 10) {
+                        if !collapsed {
+                            precisionPill.transition(.move(edge: .top).combined(with: .opacity))
+                        } else {
+                            Spacer(minLength: 0)
+                        }
+                        layersMenu
+                    }
+                    Spacer(minLength: 0)
+                    if collapsed {
+                        collapsedBar.transition(.move(edge: .bottom).combined(with: .opacity))
+                    } else {
+                        infoCard.transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
+                .padding()
+                .animation(.spring(response: 0.4, dampingFraction: 0.85), value: collapsed)
+                .onAppear {
+                    // Short screens (SE, mini) start with the map uncovered until you choose otherwise.
+                    if !collapseChosen, geo.size.height < 560 { collapsed = true }
+                }
             }
-            .padding()
         }
         .sheet(isPresented: $showPlaces) { SavedPlacesSheet() }
     }
@@ -134,6 +159,53 @@ struct MapTab: View {
 
     // MARK: Info card
 
+    private func setCollapsed(_ value: Bool) {
+        collapseChosen = true
+        collapsed = value
+    }
+
+    /// One slim line that leaves the map clear: privacy mode, distance, what they're doing.
+    private var collapsedBar: some View {
+        let partner = state.partnerLocation
+        return Button { setCollapsed(false) } label: {
+            HStack(spacing: 12) {
+                Image(systemName: state.settings.precision.symbol)
+                    .foregroundStyle(color(for: state.settings.precision))
+                if let meters = state.distanceMeters {
+                    Text(formatDistance(meters, miles: state.settings.useMiles)).font(.headline)
+                }
+                if let activity = partner?.activity, partner?.precision != .ghost {
+                    Text("\(activity.emoji) \(activity.label)").font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.up.circle.fill").font(.title2).symbolRenderingMode(.hierarchical)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .surface(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Show map details")
+    }
+
+    private var layersMenu: some View {
+        Menu {
+            Toggle(isOn: $showPlacePins) { Label("Saved places", systemImage: "mappin.and.ellipse") }
+            Toggle(isOn: $showThread) { Label("Red thread", systemImage: "point.topleft.down.to.point.bottomright.curvepath") }
+            Toggle(isOn: $showHalo) { Label("Accuracy circle", systemImage: "circle.dashed") }
+            Divider()
+            Button { setCollapsed(!collapsed) } label: {
+                Label(collapsed ? "Show details" : "Hide details", systemImage: collapsed ? "rectangle.expand.vertical" : "rectangle.compress.vertical")
+            }
+        } label: {
+            Image(systemName: "square.3.layers.3d")
+                .font(.title3)
+                .frame(width: 44, height: 44)
+                .surface(Circle())
+        }
+        .accessibilityLabel("Map layers")
+    }
+
     private var infoCard: some View {
         let settings = state.settings
         let partner = state.partnerLocation
@@ -150,6 +222,10 @@ struct MapTab: View {
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                     .accessibilityLabel("Switch to \(settings.useMiles ? "kilometers" : "miles")")
+                Button { setCollapsed(true) } label: {
+                    Image(systemName: "chevron.down.circle.fill").font(.title2).symbolRenderingMode(.hierarchical)
+                }
+                .accessibilityLabel("Hide details")
             }
 
             if let partner {

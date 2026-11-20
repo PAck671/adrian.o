@@ -199,7 +199,7 @@ struct HapticPad: View {
                 showBanner("\(state.settings.partnerName) sent a \(pulse.pattern.label) 💓")
             }
         }
-        .frame(height: 260)
+        .containerRelativeFrame(.vertical) { height, _ in min(max(height * 0.34, 200), 320) } // ~1/3 of the screen on any iPhone
         .accessibilityElement()
         .accessibilityLabel("Haptic touchpad")
         .accessibilityHint("Double-tap to send a tap pulse")

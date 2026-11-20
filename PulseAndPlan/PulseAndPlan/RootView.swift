@@ -169,43 +169,42 @@ struct PartnerHeader: View {
 
     var body: some View {
         let s = state.settings
-        HStack(spacing: 12) {
-            ZStack(alignment: .bottomTrailing) {
-                AvatarView(isMe: false, size: 46)
-                    .overlay(Circle().stroke(.tint.opacity(0.6), lineWidth: 2))
-                Circle()
-                    .fill(state.partnerOnline ? Color.green : Color.gray)
-                    .frame(width: 12, height: 12)
-                    .overlay(Circle().stroke(.black, lineWidth: 2))
-            }
-            .accessibilityLabel("\(s.partnerName) is \(state.partnerOnline ? "online" : "offline")")
-
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Button { showSettings = true } label: { Text(s.partnerName).font(.headline) }
-                        .buttonStyle(.plain)
-                        .accessibilityHint("Opens Settings to change names")
+        HStack(alignment: .center, spacing: 12) {
+            Button { showSettings = true } label: {
+                ZStack(alignment: .bottomTrailing) {
+                    AvatarView(isMe: false, size: 44)
+                        .overlay(Circle().stroke(.tint.opacity(0.6), lineWidth: 2))
+                    Circle()
+                        .fill(state.partnerOnline ? Color.green : Color.gray)
+                        .frame(width: 12, height: 12)
+                        .overlay(Circle().stroke(.black, lineWidth: 2))
                 }
-                HStack(spacing: 10) {
-                    TimelineView(.everyMinute) { context in
-                        Label(context.date.formatted(Date.FormatStyle(date: .omitted, time: .shortened, timeZone: state.partnerTZ)),
-                              systemImage: "clock")
-                    }
-                    if let meters = state.distanceMeters {
-                        Label(formatDistance(meters, miles: s.useMiles), systemImage: "location")
-                    }
-                    if let battery = state.partnerLocation?.battery {
-                        Label("\(battery)%", systemImage: batterySymbol(battery))
-                            .foregroundStyle(battery <= 15 ? .red : .secondary)
-                    }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(s.partnerName), \(state.partnerOnline ? "online" : "offline")")
+            .accessibilityHint("Opens Settings to change names and photos")
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(s.partnerName)
+                    .font(.headline)
+                    .lineLimit(1)
+                if let label = partnerStatus {
+                    Text(label)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tint)
+                        .lineLimit(1)
+                }
+                // Narrow phones drop battery first, then distance, instead of squeezing the text together.
+                ViewThatFits(in: .horizontal) {
+                    facts(distance: true, battery: true)
+                    facts(distance: true, battery: false)
+                    facts(distance: false, battery: false)
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                if let label = partnerStatus {
-                    Text(label).font(.caption2.weight(.semibold)).foregroundStyle(.tint)
-                }
             }
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
             Button {
                 state.haptics.play(.heartbeat)
                 state.sendPulse(.heartbeat)
@@ -215,6 +214,7 @@ struct PartnerHeader: View {
                     .foregroundStyle(.tint)
                     .shadow(color: state.theme.accent.opacity(0.7), radius: 8) // glows on true black
                     .symbolEffect(.bounce, value: state.lastIncomingPulse?.id)
+                    .frame(width: 44, height: 44)
             }
             .accessibilityLabel("Send a heartbeat")
             Menu {
@@ -222,20 +222,42 @@ struct PartnerHeader: View {
                 Button {
                     Task { state.textPartner(await state.sendOnMyWay() + " 🚗") }
                 } label: { Label("On my way + iMessage", systemImage: "message.fill") }
-                Button { state.textPartner("Thinking of you 💕") } label: { Label("Text \(s.partnerName)", systemImage: "bubble.left.and.text.bubble.right.fill") }
+                Button { state.textPartner("Thinking of you 💕") } label: {
+                    Label("Text \(s.partnerName)", systemImage: "bubble.left.and.text.bubble.right.fill")
+                }
+                Divider()
+                Button { showSettings = true } label: { Label("Settings", systemImage: "gearshape.fill") }
             } label: {
-                Image(systemName: "paperplane.fill").font(.title3).foregroundStyle(.secondary)
+                Image(systemName: "ellipsis.circle")
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 44, height: 44)
             }
-            .accessibilityLabel("Quick messages")
-            Button { showSettings = true } label: {
-                Image(systemName: "gearshape.fill").font(.title3).foregroundStyle(.secondary)
-            }
-            .accessibilityLabel("Settings")
+            .accessibilityLabel("More: messages and settings")
         }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
         .surface(Rectangle())
         .sheet(isPresented: $showSettings) { SettingsView() }
+    }
+
+    private func facts(distance: Bool, battery: Bool) -> some View {
+        HStack(spacing: 14) {
+            TimelineView(.everyMinute) { context in
+                Label(context.date.formatted(Date.FormatStyle(date: .omitted, time: .shortened, timeZone: state.partnerTZ)),
+                      systemImage: "clock")
+            }
+            if distance, let meters = state.distanceMeters {
+                Label(formatDistance(meters, miles: state.settings.useMiles), systemImage: "location.fill")
+            }
+            if battery, let level = state.partnerLocation?.battery {
+                Label("\(level)%", systemImage: batterySymbol(level))
+                    .foregroundStyle(level <= 15 ? .red : .secondary)
+            }
+        }
+        .labelStyle(.titleAndIcon)
+        .lineLimit(1)
+        .fixedSize()
     }
 
     private var partnerStatus: String? {

@@ -136,29 +136,37 @@ struct PlanTab: View {
         let hourEnd = hour.addingTimeInterval(3600)
         let overlapping = state.events.filter { $0.start < hourEnd && $0.end > hour }
         return Button { newEventStart = hour } label: {
-            HStack(spacing: 8) {
-                Text(timeLabel(hour, myTZ, reference: myTZ))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(6)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(iAwake ? .white.opacity(0.08) : .clear))
-                Text(timeLabel(hour, partnerTZ, reference: myTZ))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(6)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(theyAwake ? .white.opacity(0.08) : .clear))
-            }
-            .font(.subheadline.monospacedDigit())
-            .overlay(alignment: .trailing) {
-                HStack(spacing: 4) {
-                    ForEach(overlapping) { event in
-                        Text(event.title)
-                            .font(.caption2.bold())
-                            .lineLimit(1)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(event.kind.color.opacity(0.8)))
-                    }
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Text(timeLabel(hour, myTZ, reference: myTZ))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(6)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(iAwake ? .white.opacity(0.08) : .clear))
+                    Text(timeLabel(hour, partnerTZ, reference: myTZ))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(6)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(theyAwake ? .white.opacity(0.08) : .clear))
                 }
-                .padding(.trailing, 6)
+                .font(.subheadline.monospacedDigit())
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                // Events get their own line so they never sit on top of the times.
+                if !overlapping.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(overlapping) { event in
+                                Text(event.title)
+                                    .font(.caption2.bold())
+                                    .lineLimit(1)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .background(Capsule().fill(event.kind.color.opacity(0.8)))
+                            }
+                        }
+                        .padding(.horizontal, 6)
+                    }
+                    .padding(.bottom, 4)
+                }
             }
             .background(RoundedRectangle(cornerRadius: 8).fill(free ? Color.green.opacity(0.35) : .clear))
         }

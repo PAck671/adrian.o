@@ -234,6 +234,7 @@ struct BlockDropView: View {
                 }
                 .frame(width: 70)
             }
+            .frame(maxHeight: .infinity) // board takes whatever height is left, so it fits every iPhone
             if game.over {
                 resultCard(partnerScore: partnerScore, partnerDone: partnerDone)
             } else {
