@@ -9,8 +9,7 @@ final class AppState {
     var settings: AppSettings = Persist.load("settings", default: AppSettings()) {
         didSet {
             Persist.save(settings, "settings")
-            if settings.mode != oldValue.mode || settings.coupleCode != oldValue.coupleCode
-                || settings.demoCity != oldValue.demoCity {
+            if settings.coupleCode != oldValue.coupleCode {
                 restartSync()
             }
             location.keepAlive = settings.stayConnected
@@ -52,7 +51,6 @@ final class AppState {
     @ObservationIgnored private var diedAlerted = false
     @ObservationIgnored private var sync: SyncService?
     @ObservationIgnored private var started = false
-    @ObservationIgnored private var simulatedMissed = false
     @ObservationIgnored private var batteryBucket = 100
     @ObservationIgnored private var lastArrivalAlert: [String: Date] = [:]
     @ObservationIgnored private var wasNearby = false
@@ -64,6 +62,9 @@ final class AppState {
         guard !started else { return }
         started = true
         UIDevice.current.isBatteryMonitoringEnabled = true
+        // Older installs saved the demo-era defaults; show the new neutral ones until you set real names.
+        if settings.myName == "Me" { settings.myName = "You" }
+        if settings.partnerName == "Sam" { settings.partnerName = "Partner" }
         location.onUpdate = { [weak self] location in
             guard let self else { return }
             self.motion.updateSpeed(location.speed)
@@ -180,7 +181,7 @@ final class AppState {
 
     func setActive(_ active: Bool) {
         isActive = active
-        if active { resumeSharingIfNeeded() } else { didEnterBackground() }
+        if active { resumeSharingIfNeeded() }
     }
 
     /// In-app toast while open, local notification (with the system buzz) while in the background.
@@ -210,28 +211,15 @@ final class AppState {
         if settings.shareActivity { motion.start() } else { motion.stop() }
     }
 
-    func didEnterBackground() { UserDefaults.standard.set(Date(), forKey: "lastActive") }
 
     func restartSync() {
         sync?.stop()
         sync = nil
         partnerOnline = false
-        let service: SyncService
-        switch settings.mode {
-        case .demo:
-            let lastActive = UserDefaults.standard.object(forKey: "lastActive") as? Date ?? .distantPast
-            service = DemoPartnerService(city: DemoCity.named(settings.demoCity), partnerName: settings.partnerName,
-                                         missedSince: simulatedMissed ? nil : lastActive,
-                                         sendWelcomeClip: !clips.contains { isPartner($0.senderId) },
-                                         seedNote: !notes.contains { isPartner($0.authorId) })
-            simulatedMissed = true
-        case .live:
-            guard let live = SupabaseSyncService(settings: settings) else {
-                syncStatus = Config.isSupabaseConfigured ? "Enter a 6-character couple code in Settings"
-                                                         : "Add SUPABASE_URL and SUPABASE_ANON_KEY in Config.swift"
-                return
-            }
-            service = live
+        guard let service = SupabaseSyncService(settings: settings) else {
+            syncStatus = Config.isSupabaseConfigured ? "Create or join a 6-character couple code in Settings"
+                                                     : "Add SUPABASE_URL and SUPABASE_ANON_KEY in Config.swift"
+            return
         }
         service.onEvent = { [weak self] in self?.handle($0) }
         sync = service
@@ -331,7 +319,6 @@ final class AppState {
         Notifier.post(title: "👻 \(name) went Ghost", body: "They paused location sharing.", after: 14)
         Notifier.post(title: "⚠️ \(name) turned off location", body: "Location Services are off on their phone.", after: 17)
         showToast("Lock your phone: 5 test alerts arrive in 5–17 s")
-        (sync as? DemoPartnerService)?.simulateGhost(after: 25, for: 20) // and a real in-app Ghost alert in Demo mode
     }
 
     // MARK: On my way & iMessage

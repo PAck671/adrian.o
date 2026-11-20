@@ -70,6 +70,7 @@ struct RootView: View {
             }
         }
         .tint(state.theme.accent)
+        .environment(\.surfaceStyle, state.theme.surface)
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: state.toast)
         .animation(.easeInOut(duration: 0.3), value: state.match)
         .sheet(item: $state.messageDraft) { MessageSheet(draft: $0, phone: state.settings.partnerPhone) }
@@ -100,7 +101,7 @@ struct ToastView: View {
             .multilineTextAlignment(.center)
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18))
+            .surface(RoundedRectangle(cornerRadius: 18))
             .overlay(RoundedRectangle(cornerRadius: 18).stroke(.tint.opacity(0.5)))
             .padding(.horizontal, 24)
             .accessibilityAddTraits(.updatesFrequently)
@@ -181,13 +182,9 @@ struct PartnerHeader: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(s.partnerName).font(.headline)
-                    if s.mode == .demo {
-                        Text("DEMO")
-                            .font(.caption2.bold())
-                            .padding(.horizontal, 5)
-                            .background(Capsule().fill(.tint.opacity(0.4)))
-                    }
+                    Button { showSettings = true } label: { Text(s.partnerName).font(.headline) }
+                        .buttonStyle(.plain)
+                        .accessibilityHint("Opens Settings to change names")
                 }
                 HStack(spacing: 10) {
                     TimelineView(.everyMinute) { context in
@@ -216,6 +213,7 @@ struct PartnerHeader: View {
                 Image(systemName: "heart.fill")
                     .font(.title2)
                     .foregroundStyle(.tint)
+                    .shadow(color: state.theme.accent.opacity(0.7), radius: 8) // glows on true black
                     .symbolEffect(.bounce, value: state.lastIncomingPulse?.id)
             }
             .accessibilityLabel("Send a heartbeat")
@@ -236,7 +234,7 @@ struct PartnerHeader: View {
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
-        .background(.ultraThinMaterial)
+        .surface(Rectangle())
         .sheet(isPresented: $showSettings) { SettingsView() }
     }
 
@@ -282,25 +280,6 @@ struct SettingsView: View {
                     }
                 }
 
-                Section {
-                    Picker("Mode", selection: $state.settings.mode) {
-                        ForEach(SyncMode.allCases) { Text($0.label).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    if !state.syncStatus.isEmpty {
-                        Text(state.syncStatus).font(.footnote).foregroundStyle(.secondary)
-                    }
-                } header: { Text("Sync mode") }
-
-                if state.settings.mode == .demo {
-                    Section {
-                        Picker("Partner city", selection: $state.settings.demoCity) {
-                            ForEach(DemoCity.all) { Text($0.name).tag($0.name) }
-                        }
-                    } header: { Text("Demo partner") } footer: {
-                        Text("Simulates a connected partner: a moving pin, pulse replies, movie matches, notes, video replies and a draining battery.")
-                    }
-                } else {
                     Section {
                         if !Config.isSupabaseConfigured {
                             Label("Add SUPABASE_URL and SUPABASE_ANON_KEY in Config.swift, then rebuild.",
@@ -322,10 +301,12 @@ struct SettingsView: View {
                                 state.textPartner("Join me on Red Thread 💕 Our couple code: \(state.settings.coupleCode)")
                             }
                         }
-                    } header: { Text("Live pair") } footer: {
+                        if !state.syncStatus.isEmpty {
+                            Text(state.syncStatus).font(.footnote).foregroundStyle(.secondary)
+                        }
+                    } header: { Text("Pair with your partner") } footer: {
                         Text("One of you creates a code and shares it; the other joins with it.")
                     }
-                }
 
                 Section {
                     PhotoRow(isMe: true)
@@ -395,11 +376,8 @@ struct SettingsView: View {
             .background(.black.opacity(0.4))
             .navigationTitle("Settings")
             .toolbar { Button("Done") { dismiss() } }
-            .onChange(of: state.settings.demoCity) { _, city in
-                state.settings.partnerTimeZone = DemoCity.named(city).timeZone
-            }
         }
-        .presentationBackground(.ultraThinMaterial)
+        .sheetSurface()
     }
 
     private var timeZoneOptions: some View {
@@ -465,6 +443,11 @@ struct AppearanceView: View {
     @Environment(AppState.self) private var state
     @State private var photoItem: PhotosPickerItem?
 
+    static var glassAvailable: Bool {
+        if #available(iOS 26, *) { return true }
+        return false
+    }
+
     var body: some View {
         @Bindable var state = state
         Form {
@@ -499,6 +482,17 @@ struct AppearanceView: View {
                     get: { state.theme.accent },
                     set: { state.theme.customAccent = RGBA($0) }
                 ), supportsOpacity: false)
+            }
+
+            Section {
+                Toggle(isOn: $state.theme.glass.animation(.spring)) {
+                    Label("Liquid Glass", systemImage: "drop.halffull")
+                }
+                .disabled(!Self.glassAvailable)
+            } header: { Text("Surfaces") } footer: {
+                Text(Self.glassAvailable
+                     ? "Cards, bars and sheets become see-through glass that refracts your background. Looks best over Aurora or your own photo."
+                     : "Liquid Glass needs iOS 26 or later.")
             }
 
             Section {

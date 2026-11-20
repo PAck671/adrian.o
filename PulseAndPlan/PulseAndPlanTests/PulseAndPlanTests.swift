@@ -77,14 +77,11 @@ final class PulseAndPlanTests: XCTestCase {
         XCTAssertEqual(nearby.longitude, fuzzy.longitude, accuracy: 1e-9)
     }
 
-    func testFourInRowWinsAndAIBlocks() {
+    func testFourInRowWins() {
         // A: 0,1,2,3 on the bottom row; B stacks on column 6.
         XCTAssertEqual(FourInRow.winner([0, 6, 1, 6, 2, 6, 3]), .a)
         XCTAssertNil(FourInRow.winner([0, 6, 1, 6, 2]))
         XCTAssertEqual(FourInRow.winner([0, 1, 1, 2, 2, 3, 2, 3, 3, 6, 3]), .a) // diagonal
-        // B to move; A threatens column 3. AI must block.
-        var rng = SeededRandom(code: "AIAI", salt: "t")
-        XCTAssertEqual(FourInRow.aiMove([0, 6, 1, 6, 2], using: &rng), 3)
         XCTAssertFalse(FourInRow.canDrop([3, 3, 3, 3, 3, 3], in: 3))
     }
 

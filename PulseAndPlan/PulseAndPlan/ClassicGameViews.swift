@@ -1,9 +1,5 @@
 import SwiftUI
 
-/// In Demo mode the simulated partner plays the other role in turn-based games.
-@MainActor
-private func isDemo(_ state: AppState) -> Bool { state.settings.mode == .demo }
-
 private struct GameStatus: View {
     let text: String
     let highlight: Bool
@@ -58,7 +54,6 @@ struct SeaBattleView: View {
             }
             .padding()
         }
-        .task(id: moves.count) { await aiTurnIfNeeded() }
     }
 
     private func section(_ title: String, sunk: Int) -> some View {
@@ -108,20 +103,6 @@ struct SeaBattleView: View {
         p.moves.append(cell)
         state.updateGame(p)
         if game.fleet(role.opponent).contains(cell) { state.haptics.success() } else { state.haptics.play(.tap) }
-    }
-
-    private func aiTurnIfNeeded() async {
-        guard isDemo(state) else { return }
-        let moves = progress.moves
-        guard game.winner(moves) == nil, SeaBattle.nextShooter(moves) == role.opponent else { return }
-        try? await Task.sleep(for: .milliseconds(900))
-        guard !Task.isCancelled, progress.moves == moves else { return }
-        var rng = SystemRandomNumberGenerator()
-        guard let shot = game.aiShot(for: role.opponent, moves: moves, using: &rng) else { return }
-        var p = progress
-        p.moves.append(shot)
-        state.updateGame(p)
-        if game.fleet(role).contains(shot) { state.haptics.bump() }
     }
 }
 
@@ -181,7 +162,6 @@ struct FourInRowView: View {
             Spacer()
         }
         .padding()
-        .task(id: moves.count) { await aiTurnIfNeeded() }
     }
 
     private func disc(_ role: GameRole) -> String { role == .a ? "🔴" : "🟡" }
@@ -192,20 +172,6 @@ struct FourInRowView: View {
         p.moves.append(col)
         state.updateGame(p)
         if FourInRow.winner(p.moves) == role { state.haptics.success() } else { state.haptics.play(.tap) }
-    }
-
-    private func aiTurnIfNeeded() async {
-        guard isDemo(state) else { return }
-        let moves = progress.moves
-        guard FourInRow.winner(moves) == nil, !FourInRow.isDraw(moves), FourInRow.nextPlayer(moves) == role.opponent else { return }
-        try? await Task.sleep(for: .milliseconds(700))
-        guard !Task.isCancelled, progress.moves == moves else { return }
-        var rng = SystemRandomNumberGenerator()
-        guard let col = FourInRow.aiMove(moves, using: &rng) else { return }
-        var p = progress
-        p.moves.append(col)
-        state.updateGame(p)
-        state.haptics.bump()
     }
 }
 
@@ -282,7 +248,6 @@ struct BlockDropView: View {
                 if let cleared = game.step() { locked(cleared) }
             }
         }
-        .task { await simulatePartnerIfDemo() }
     }
 
     private var boardCanvas: some View {
@@ -388,7 +353,7 @@ struct BlockDropView: View {
         }
         .frame(maxWidth: .infinity)
         .padding()
-        .background(RoundedRectangle(cornerRadius: 16).fill(.ultraThinMaterial))
+        .surface(RoundedRectangle(cornerRadius: 16))
     }
 
     private func locked(_ cleared: Int) {
@@ -415,27 +380,6 @@ struct BlockDropView: View {
         var p = progress
         p.scores[role.rawValue] = 0
         p.finished.removeAll { $0 == role.rawValue }
-        if isDemo(state) {
-            p.scores[role.opponent.rawValue] = 0
-            p.finished.removeAll { $0 == role.opponent.rawValue }
-        }
         state.updateGame(p)
-        Task { await simulatePartnerIfDemo() }
-    }
-
-    /// Demo partner: score climbs in bursts until they top out somewhere between 1,500 and 6,000.
-    private func simulatePartnerIfDemo() async {
-        guard isDemo(state) else { return }
-        let other = role.opponent.rawValue
-        let finishAt = Int.random(in: 1500...6000)
-        while !Task.isCancelled, !progress.finished.contains(other) {
-            try? await Task.sleep(for: .seconds(Double.random(in: 3...6)))
-            guard running || game.over else { continue }
-            var p = progress
-            let score = (p.scores[other] ?? 0) + ([20, 40, 100, 100, 300, 500].randomElement() ?? 100)
-            p.scores[other] = score
-            if score >= finishAt { p.finished.append(other) }
-            state.updateGame(p)
-        }
     }
 }

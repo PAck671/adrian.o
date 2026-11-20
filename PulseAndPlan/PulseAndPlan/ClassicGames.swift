@@ -62,20 +62,6 @@ struct SeaBattle {
             .filter { (0..<size).contains($0.0) && (0..<size).contains($0.1) }
             .map { $0.1 * size + $0.0 }
     }
-
-    /// Hunt/target AI: finish damaged ships first, otherwise search on a checkerboard.
-    func aiShot(for role: GameRole, moves: [Int], using rng: inout some RandomNumberGenerator) -> Int? {
-        let shots = Self.shots(by: role, in: moves)
-        let fired = Set(shots)
-        let enemy = fleet(role.opponent)
-        let sunk = Set(sunkShips(of: role.opponent, moves: moves).flatMap { $0 })
-        let openHits = shots.filter { enemy.contains($0) && !sunk.contains($0) }
-        let targets = openHits.flatMap { Self.neighbors($0) }.filter { !fired.contains($0) }
-        if let pick = targets.randomElement(using: &rng) { return pick }
-        let open = (0..<(Self.size * Self.size)).filter { !fired.contains($0) }
-        let parity = open.filter { ($0 % Self.size + $0 / Self.size) % 2 == 0 }
-        return (parity.isEmpty ? open : parity).randomElement(using: &rng)
-    }
 }
 
 // MARK: - Four in a Row
@@ -121,27 +107,6 @@ enum FourInRow {
     }
 
     static func isDraw(_ moves: [Int]) -> Bool { winner(moves) == nil && moves.count >= columns * rows }
-
-    /// Wins if it can, blocks a win, avoids handing one over, leans to the center.
-    static func aiMove(_ moves: [Int], using rng: inout some RandomNumberGenerator) -> Int? {
-        let legal = (0..<columns).filter { canDrop(moves, in: $0) }
-        guard !legal.isEmpty else { return nil }
-        let me = nextPlayer(moves)
-        func drop(_ col: Int, as player: GameRole) -> [[GameRole?]] {
-            var g = grid(moves)
-            if let row = g[col].firstIndex(where: { $0 == nil }) { g[col][row] = player }
-            return g
-        }
-        if let win = legal.first(where: { wins(drop($0, as: me), me) }) { return win }
-        if let block = legal.first(where: { wins(drop($0, as: me.opponent), me.opponent) }) { return block }
-        let safe = legal.filter { col in
-            let after = moves + [col]
-            return !(0..<columns).contains { canDrop(after, in: $0) && winner(after + [$0]) == me.opponent }
-        }
-        let pool = safe.isEmpty ? legal : safe
-        let central = pool.min { abs($0 - 3) < abs($1 - 3) }
-        return Int.random(in: 0..<10, using: &rng) < 6 ? central : pool.randomElement(using: &rng)
-    }
 }
 
 // MARK: - Block Drop

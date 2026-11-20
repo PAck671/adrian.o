@@ -472,7 +472,7 @@ struct ReelPlayer: View {
                         Text("\(mine ? state.settings.myAvatar : state.settings.partnerAvatar) \(mine ? "You" : state.settings.partnerName) · \(clip.createdAt.formatted(.relative(presentation: .named)))")
                             .font(.subheadline.weight(.semibold))
                             .padding(8)
-                            .background(.ultraThinMaterial, in: Capsule())
+                            .surface(Capsule())
                     }
                     Spacer()
                     Button { dismiss() } label: {
@@ -487,7 +487,7 @@ struct ReelPlayer: View {
                         Button("Replay") { load() }.buttonStyle(.borderedProminent)
                     }
                     .padding()
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+                    .surface(RoundedRectangle(cornerRadius: 20))
                     Spacer()
                 }
                 HStack(spacing: 14) {
@@ -504,7 +504,7 @@ struct ReelPlayer: View {
                     }
                 }
                 .padding(10)
-                .background(.ultraThinMaterial, in: Capsule())
+                .surface(Capsule())
                 Picker("Speed", selection: $rate) {
                     Text("1×").tag(Float(1))
                     Text("1.5×").tag(Float(1.5))

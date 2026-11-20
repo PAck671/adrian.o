@@ -226,7 +226,7 @@ struct PlanTab: View {
                 }
                 .buttonStyle(.borderless)
                 .padding(10)
-                .background(RoundedRectangle(cornerRadius: 12).fill(.ultraThinMaterial))
+                .surface(RoundedRectangle(cornerRadius: 12))
             }
         }
     }

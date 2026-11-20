@@ -4,23 +4,15 @@ import SwiftUI
 
 // MARK: - Settings
 
-enum SyncMode: String, Codable, CaseIterable, Identifiable {
-    case demo, live
-    var id: String { rawValue }
-    var label: String { self == .demo ? "Demo / Solo Test" : "Live Pair (Supabase)" }
-}
-
 struct AppSettings: Codable, Equatable {
-    var mode: SyncMode = .demo
     var deviceId = UUID()
-    var myName = "Me"
-    var partnerName = "Sam"
+    var myName = "You"
+    var partnerName = "Partner"
     var myAvatar = "🦊"
     var partnerAvatar = "🐼"
     var coupleCode = ""
     var myTimeZone = TimeZone.current.identifier
     var partnerTimeZone = "Asia/Tokyo"
-    var demoCity = "Tokyo"
     var useMiles = Locale.current.measurementSystem == .us
     var tmdbKey = ""
     var precision: PrecisionMode = .live
@@ -411,32 +403,6 @@ enum SyncEvent {
     case noteUpserted(SharedNote)
     case noteDeleted(UUID)
     case profile(userId: UUID, avatarURL: URL)
-}
-
-// MARK: - Demo cities
-
-struct DemoCity: Identifiable, Hashable {
-    let name: String
-    let lat: Double
-    let lng: Double
-    let timeZone: String
-    var id: String { name }
-
-    static let all: [DemoCity] = [
-        .init(name: "Tokyo", lat: 35.6595, lng: 139.7005, timeZone: "Asia/Tokyo"),
-        .init(name: "Seoul", lat: 37.5563, lng: 126.9220, timeZone: "Asia/Seoul"),
-        .init(name: "London", lat: 51.5136, lng: -0.1365, timeZone: "Europe/London"),
-        .init(name: "Paris", lat: 48.8530, lng: 2.3499, timeZone: "Europe/Paris"),
-        .init(name: "Berlin", lat: 52.5200, lng: 13.4050, timeZone: "Europe/Berlin"),
-        .init(name: "New York", lat: 40.7306, lng: -73.9866, timeZone: "America/New_York"),
-        .init(name: "Chicago", lat: 41.8789, lng: -87.6359, timeZone: "America/Chicago"),
-        .init(name: "Los Angeles", lat: 34.0522, lng: -118.2437, timeZone: "America/Los_Angeles"),
-        .init(name: "Toronto", lat: 43.6532, lng: -79.3832, timeZone: "America/Toronto"),
-        .init(name: "Sydney", lat: -33.8688, lng: 151.2093, timeZone: "Australia/Sydney"),
-        .init(name: "Manila", lat: 14.5995, lng: 120.9842, timeZone: "Asia/Manila"),
-        .init(name: "São Paulo", lat: -23.5505, lng: -46.6333, timeZone: "America/Sao_Paulo"),
-    ]
-    static func named(_ name: String) -> DemoCity { all.first { $0.name == name } ?? all[0] }
 }
 
 // MARK: - Persistence

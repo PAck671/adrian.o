@@ -32,10 +32,11 @@ enum ThemePreset: String, Codable, CaseIterable, Identifiable {
 }
 
 enum BackgroundEffect: String, Codable, CaseIterable, Identifiable {
-    case aurora, hearts, stars, gradient, photo
+    case oled, aurora, hearts, stars, gradient, photo
     var id: String { rawValue }
     var label: String {
         switch self {
+        case .oled: "True black (OLED)"
         case .aurora: "Aurora"
         case .hearts: "Floating hearts"
         case .stars: "Starfield"
@@ -58,12 +59,67 @@ struct RGBA: Codable, Equatable {
 struct ThemeSettings: Codable, Equatable {
     var preset: ThemePreset = .crimson
     var customAccent: RGBA?
-    var effect: BackgroundEffect = .aurora
+    var effect: BackgroundEffect = .oled
     var photoDim = 0.45
     var photoBlur = 4.0
+    var glass = false
     var accent: Color { customAccent?.color ?? preset.accent }
 
+    /// Liquid Glass needs iOS 26; on OLED black, cards stay black so their pixels stay off.
+    var surface: SurfaceStyle {
+        if glass, #available(iOS 26, *) { return .glass }
+        return effect == .oled ? .black : .material
+    }
+
     static var photoURL: URL { URL.documentsDirectory.appending(path: "background.jpg") }
+}
+
+// MARK: - Surfaces (cards, bars, pills)
+
+enum SurfaceStyle { case material, black, glass }
+
+extension EnvironmentValues {
+    @Entry var surfaceStyle: SurfaceStyle = .material
+}
+
+private struct Surface<S: Shape>: ViewModifier {
+    @Environment(\.surfaceStyle) private var style
+    let shape: S
+
+    func body(content: Content) -> some View {
+        switch style {
+        case .glass:
+            if #available(iOS 26, *) {
+                content.glassEffect(.regular, in: shape)
+            } else {
+                content.background(.ultraThinMaterial, in: shape)
+            }
+        case .black:
+            content
+                .background(.black, in: shape)
+                .overlay(shape.stroke(.white.opacity(0.12), lineWidth: 1))
+        case .material:
+            content.background(.ultraThinMaterial, in: shape)
+        }
+    }
+}
+
+private struct SheetSurface: ViewModifier {
+    @Environment(\.surfaceStyle) private var style
+
+    func body(content: Content) -> some View {
+        switch style {
+        case .glass: content // iOS 26 sheets are Liquid Glass by default
+        case .black: content.presentationBackground(.black)
+        case .material: content.sheetSurface()
+        }
+    }
+}
+
+extension View {
+    /// The card/bar background for the chosen theme: material, OLED black, or Liquid Glass.
+    func surface(_ shape: some Shape = Capsule()) -> some View { modifier(Surface(shape: shape)) }
+    func sheetSurface() -> some View { modifier(SheetSurface()) }
 }
 
 // MARK: - Background
@@ -77,6 +133,9 @@ struct ThemedBackground: View {
         ZStack {
             Color.black
             switch theme.effect {
+            case .oled:
+                // Pure #000 keeps OLED pixels off (deepest black, least battery); one faint accent glow up top.
+                RadialGradient(colors: [theme.accent.opacity(0.22), .clear], center: .top, startRadius: 0, endRadius: 320)
             case .aurora:
                 AuroraView(colors: theme.preset.palette + [theme.accent], paused: reduceMotion)
             case .hearts:
@@ -321,7 +380,7 @@ struct TabBar: View {
             }
         }
         .padding(6)
-        .background(.ultraThinMaterial, in: Capsule())
+        .surface(Capsule())
         .padding(.horizontal, 12)
         .padding(.bottom, 2)
     }

@@ -17,7 +17,7 @@ struct MapTab: View {
         let settings = state.settings
         ZStack {
             // Redraw at ~30 fps only while a pin is gliding between fixes; idle otherwise.
-            TimelineView(.animation(minimumInterval: 1 / 30, paused: !isActiveTab || !gliding)) { context in
+            TimelineView(.animation(paused: !isActiveTab || !gliding)) { context in // full ProMotion rate, only while gliding
                 let now = context.date
                 let me = state.myCoordinate.map { myGlide.position(at: now) ?? $0 }
                 let them = partner?.coordinate.map { partnerGlide.position(at: now) ?? $0 }
@@ -121,7 +121,7 @@ struct MapTab: View {
             }
         }
         .padding(4)
-        .background(.ultraThinMaterial, in: Capsule())
+        .surface(Capsule())
     }
 
     private func color(for mode: PrecisionMode) -> Color {
@@ -217,7 +217,7 @@ struct MapTab: View {
             .font(.subheadline)
         }
         .padding()
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22))
+        .surface(RoundedRectangle(cornerRadius: 22))
     }
 
     @ViewBuilder private var sharingControls: some View {

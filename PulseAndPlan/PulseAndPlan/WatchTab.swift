@@ -107,7 +107,7 @@ struct SwipeDeck: View {
                 .font(.title.bold())
                 .foregroundStyle(color)
                 .frame(width: 68, height: 68)
-                .background(Circle().fill(.ultraThinMaterial))
+                .surface(Circle())
                 .overlay(Circle().stroke(color.opacity(0.5), lineWidth: 2))
         }
         .accessibilityLabel(label)
@@ -188,7 +188,7 @@ struct MovieCard: View {
             }
             .padding()
         }
-        .background(RoundedRectangle(cornerRadius: 22).fill(.ultraThinMaterial))
+        .surface(RoundedRectangle(cornerRadius: 22))
         .shadow(color: .black.opacity(0.5), radius: 10, y: 4)
         .accessibilityElement(children: .contain)
     }

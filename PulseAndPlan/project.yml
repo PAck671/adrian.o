@@ -32,6 +32,7 @@ targets:
         UILaunchScreen:
           UIColorName: ""
         UIUserInterfaceStyle: Dark
+        CADisableMinimumFrameDurationOnPhone: true # let animations run at 120 Hz on ProMotion displays
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UIBackgroundModes:

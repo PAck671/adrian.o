@@ -62,7 +62,7 @@ struct LabyrinthPlayer: View {
             Image(systemName: direction.symbol)
                 .font(.title.bold())
                 .frame(width: 64, height: 64)
-                .background(Circle().fill(.ultraThinMaterial))
+                .surface(Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Move \(String(describing: direction))")

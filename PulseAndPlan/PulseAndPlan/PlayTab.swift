@@ -73,11 +73,7 @@ struct PlayTab: View {
                     }
                     .disabled(code.count != 4)
                 } footer: {
-                    if state.settings.mode == .demo {
-                        Text(game.isTurnBased || game == .blockDrop
-                             ? "Demo: the simulated partner plays the other side for you."
-                             : "Demo tip: flip between A and B with the switch at the top of the game screen to try both roles on one phone.")
-                    }
+                    Text("Both of you enter the same code and pick opposite roles.")
                 }
             }
             .scrollContentBackground(.hidden)
@@ -202,7 +198,7 @@ struct CircuitPanel: View {
             .accessibilityLabel("\(progress.strikes) of 3 strikes")
         }
         .padding()
-        .background(RoundedRectangle(cornerRadius: 14).fill(.ultraThinMaterial))
+        .surface(RoundedRectangle(cornerRadius: 14))
     }
 
     private func resultCard(_ title: String, _ subtitle: String, _ color: Color) -> some View {
@@ -227,7 +223,7 @@ struct CircuitPanel: View {
             content()
         }
         .padding()
-        .background(RoundedRectangle(cornerRadius: 16).fill(.ultraThinMaterial))
+        .surface(RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(solved ? .green.opacity(0.6) : .clear, lineWidth: 2))
         .disabled(solved)
     }
