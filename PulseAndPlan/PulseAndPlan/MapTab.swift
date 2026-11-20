@@ -53,8 +53,8 @@ struct MapTab: View {
                         }
                         if let me {
                             MapPolyline(coordinates: [me, them], contourStyle: .geodesic)
-                                .stroke(LinearGradient(colors: [.indigo, .pink], startPoint: .leading, endPoint: .trailing),
-                                        style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [8, 6]))
+                                .stroke(Color.redThread.opacity(0.9),
+                                        style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
                         }
                     }
                 }

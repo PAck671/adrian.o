@@ -81,7 +81,7 @@ struct PlanTab: View {
                     let count = await state.importCalendarBusy()
                     importing = false
                     state.showToast(count.map { "Shared \($0) busy blocks from your calendar (titles stay private)." }
-                                    ?? "Calendar access is off. Turn it on in iOS Settings → Pulse & Plan.")
+                                    ?? "Calendar access is off. Turn it on in iOS Settings → Red Thread.")
                 }
             } label: {
                 Label(importing ? "Reading calendar…" : state.settings.syncCalendar ? "Refresh my busy times" : "Share my busy times",

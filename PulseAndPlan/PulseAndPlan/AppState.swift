@@ -325,7 +325,7 @@ final class AppState {
     /// Schedules sample notifications so you can lock the phone and see how alerts look.
     func sendTestAlerts() {
         let name = settings.partnerName
-        Notifier.post(title: "💓 \(name) sent a Heartbeat", body: "Open Pulse & Plan to feel it.", after: 5)
+        Notifier.post(title: "💓 \(name) sent a Heartbeat", body: "Open Red Thread to feel it.", after: 5)
         Notifier.post(title: "🔋 \(name)'s phone is at 12%", body: "Their battery is getting low.", after: 8)
         Notifier.post(title: "📍 \(name) arrived", body: "\(name) is at home.", after: 11)
         Notifier.post(title: "👻 \(name) went Ghost", body: "They paused location sharing.", after: 14)
@@ -421,7 +421,7 @@ final class AppState {
             // Late (sent while offline) or app in background, where iOS won't play Core Haptics: keep it for later.
             missedPulses.append(p)
             if !isActive, settings.alertPulses {
-                Notifier.post(title: "💓 \(settings.partnerName) sent a \(p.pattern.label)", body: "Open Pulse & Plan to feel it.")
+                Notifier.post(title: "💓 \(settings.partnerName) sent a \(p.pattern.label)", body: "Open Red Thread to feel it.")
             }
         } else {
             haptics.play(p.pattern, duration: p.duration)

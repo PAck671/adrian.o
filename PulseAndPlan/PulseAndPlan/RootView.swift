@@ -319,7 +319,7 @@ struct SettingsView: View {
                         }
                         if !state.settings.coupleCode.isEmpty {
                             Button("Send code via iMessage") {
-                                state.textPartner("Join me on Pulse & Plan 💕 Our couple code: \(state.settings.coupleCode)")
+                                state.textPartner("Join me on Red Thread 💕 Our couple code: \(state.settings.coupleCode)")
                             }
                         }
                     } header: { Text("Live pair") } footer: {

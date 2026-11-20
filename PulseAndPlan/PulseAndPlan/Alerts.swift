@@ -109,7 +109,7 @@ final class CalendarBridge {
         item.title = event.title
         item.startDate = event.start
         item.endDate = event.end
-        item.notes = "Planned with \(partnerName) in Pulse & Plan"
+        item.notes = "Planned with \(partnerName) in Red Thread"
         item.calendar = store.defaultCalendarForNewEvents
         try store.save(item, span: .thisEvent)
     }

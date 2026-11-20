@@ -1,4 +1,4 @@
--- Pulse & Plan — Supabase schema. Paste into the Supabase SQL editor and run. Re-running is safe
+-- Red Thread — Supabase schema. Paste into the Supabase SQL editor and run. Re-running is safe
 -- (it also upgrades a v1.0 database).
 -- shortcut: the app uses only the anon key (no Supabase Auth), so the 6-character couple code is
 -- the only secret and the policies below let any anon client read/write. Add Supabase Auth and

@@ -30,5 +30,5 @@ APP="build/Build/Products/Release-iphoneos/PulseAndPlan.app"
 
 mkdir -p dist/Payload
 cp -R "$APP" dist/Payload/
-(cd dist && zip -qry PulseAndPlan-unsigned.ipa Payload && rm -rf Payload)
-echo "Built $(pwd)/dist/PulseAndPlan-unsigned.ipa"
+(cd dist && zip -qry RedThread-unsigned.ipa Payload && rm -rf Payload)
+echo "Built $(pwd)/dist/RedThread-unsigned.ipa"

@@ -26,7 +26,7 @@ targets:
     info:
       path: PulseAndPlan/Info.plist
       properties:
-        CFBundleDisplayName: "Pulse & Plan"
+        CFBundleDisplayName: "Red Thread"
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         UILaunchScreen:
@@ -36,14 +36,14 @@ targets:
           - UIInterfaceOrientationPortrait
         UIBackgroundModes:
           - location
-        NSCameraUsageDescription: "Pulse & Plan uses the camera to record short video messages for your partner."
-        NSMicrophoneUsageDescription: "Pulse & Plan records audio with your video messages."
-        NSPhotoLibraryUsageDescription: "Pulse & Plan can save video messages to your photo library."
-        NSLocationWhenInUseUsageDescription: "Pulse & Plan shares your location with your partner while you use the app."
+        NSCameraUsageDescription: "Red Thread uses the camera to record short video messages for your partner."
+        NSMicrophoneUsageDescription: "Red Thread records audio with your video messages."
+        NSPhotoLibraryUsageDescription: "Red Thread can save video messages to your photo library."
+        NSLocationWhenInUseUsageDescription: "Red Thread shares your location with your partner while you use the app."
         NSLocationAlwaysAndWhenInUseUsageDescription: "Allow Always so your partner keeps seeing where you are when the app is in the background. You can pause anytime with Ghost Mode."
-        NSCalendarsFullAccessUsageDescription: "Pulse & Plan reads when you're busy (never event titles) to find free time with your partner, and adds plans you make together to your calendar."
-        NSCalendarsWriteOnlyAccessUsageDescription: "Pulse & Plan adds plans you make together to your calendar."
-        NSMotionUsageDescription: "Pulse & Plan uses motion and fitness data to show your partner whether you're walking, driving, sitting or resting. Turn it off anytime in Settings."
+        NSCalendarsFullAccessUsageDescription: "Red Thread reads when you're busy (never event titles) to find free time with your partner, and adds plans you make together to your calendar."
+        NSCalendarsWriteOnlyAccessUsageDescription: "Red Thread adds plans you make together to your calendar."
+        NSMotionUsageDescription: "Red Thread uses motion and fitness data to show your partner whether you're walking, driving, sitting or resting. Turn it off anytime in Settings."
   PulseAndPlanTests:
     type: bundle.unit-test
     platform: iOS

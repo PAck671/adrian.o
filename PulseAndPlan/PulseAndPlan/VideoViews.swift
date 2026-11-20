@@ -152,7 +152,7 @@ final class CameraModel: NSObject, AVCaptureFileOutputRecordingDelegate {
     func configure() async {
         guard status == .idle else { return }
         guard await AVCaptureDevice.requestAccess(for: .video) else {
-            status = .unavailable("Camera access is off. Turn it on in iOS Settings → Pulse & Plan.")
+            status = .unavailable("Camera access is off. Turn it on in iOS Settings → Red Thread.")
             return
         }
         _ = await AVCaptureDevice.requestAccess(for: .audio)

@@ -4,11 +4,12 @@ import UIKit
 // MARK: - Theme settings
 
 enum ThemePreset: String, Codable, CaseIterable, Identifiable {
-    case rose, ocean, sunset, forest, lavender, midnight
+    case crimson, rose, ocean, sunset, forest, lavender, midnight
     var id: String { rawValue }
-    var label: String { rawValue.capitalized }
+    var label: String { self == .crimson ? "Red Thread" : rawValue.capitalized }
     var accent: Color {
         switch self {
+        case .crimson: Color(red: 0.95, green: 0.18, blue: 0.28)
         case .rose: Color(red: 1, green: 0.33, blue: 0.55)
         case .ocean: Color(red: 0.2, green: 0.75, blue: 1)
         case .sunset: Color(red: 1, green: 0.55, blue: 0.25)
@@ -19,6 +20,7 @@ enum ThemePreset: String, Codable, CaseIterable, Identifiable {
     }
     var palette: [Color] {
         switch self {
+        case .crimson: [Color(red: 0.55, green: 0.02, blue: 0.1), Color(red: 0.3, green: 0.02, blue: 0.12), Color(red: 0.85, green: 0.12, blue: 0.2)]
         case .rose: [Color(red: 0.75, green: 0.1, blue: 0.4), Color(red: 0.45, green: 0.1, blue: 0.6), Color(red: 1, green: 0.45, blue: 0.5)]
         case .ocean: [Color(red: 0, green: 0.35, blue: 0.7), Color(red: 0, green: 0.6, blue: 0.7), Color(red: 0.25, green: 0.2, blue: 0.7)]
         case .sunset: [Color(red: 0.9, green: 0.35, blue: 0.2), Color(red: 0.75, green: 0.15, blue: 0.45), Color(red: 1, green: 0.7, blue: 0.3)]
@@ -54,7 +56,7 @@ struct RGBA: Codable, Equatable {
 }
 
 struct ThemeSettings: Codable, Equatable {
-    var preset: ThemePreset = .rose
+    var preset: ThemePreset = .crimson
     var customAccent: RGBA?
     var effect: BackgroundEffect = .aurora
     var photoDim = 0.45
@@ -183,10 +185,33 @@ struct Starfield: View {
 
 // MARK: - Splash
 
+extension Color {
+    static let redThread = Color(red: 0.86, green: 0.08, blue: 0.2)
+}
+
+/// A slack thread with one loose loop in the middle, like a knot tied between two pinkies.
+struct ThreadShape: Shape {
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: r.minX, y: r.midY))
+        p.addCurve(to: CGPoint(x: r.midX - 8, y: r.midY + 4),
+                   control1: CGPoint(x: r.minX + r.width * 0.2, y: r.maxY),
+                   control2: CGPoint(x: r.midX - 30, y: r.maxY))
+        p.addCurve(to: CGPoint(x: r.midX + 8, y: r.midY + 4),
+                   control1: CGPoint(x: r.midX - 18, y: r.minY - 6),
+                   control2: CGPoint(x: r.midX + 18, y: r.minY - 6))
+        p.addCurve(to: CGPoint(x: r.maxX, y: r.midY),
+                   control1: CGPoint(x: r.midX + 30, y: r.maxY),
+                   control2: CGPoint(x: r.minX + r.width * 0.8, y: r.maxY))
+        return p
+    }
+}
+
 struct SplashView: View {
     @Environment(AppState.self) private var state
     @State private var beat = false
     @State private var rings = false
+    @State private var threadDrawn = false
 
     var body: some View {
         ZStack {
@@ -209,18 +234,35 @@ struct SplashView: View {
                         .scaleEffect(beat ? 1.12 : 0.92)
                         .shadow(color: state.theme.accent.opacity(0.6), radius: 24)
                 }
-                Text("Pulse & Plan")
-                    .font(.system(size: 36, weight: .heavy, design: .rounded))
-                HStack(spacing: 14) { AvatarView(isMe: true, size: 56); Text("♥").font(.title).foregroundStyle(state.theme.accent); AvatarView(isMe: false, size: 56) }
-                    .font(.title2)
+                Text("Red Thread")
+                    .font(.system(size: 36, weight: .heavy, design: .serif))
+                // The legend: an invisible red thread ties two people together, however far apart.
+                ZStack {
+                    ThreadShape()
+                        .trim(from: 0, to: threadDrawn ? 1 : 0)
+                        .stroke(Color.redThread, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                        .shadow(color: Color.redThread.opacity(0.8), radius: 6)
+                        .frame(width: 150, height: 40)
+                    HStack {
+                        AvatarView(isMe: true, size: 56)
+                        Spacer()
+                        AvatarView(isMe: false, size: 56)
+                    }
+                    .frame(width: 230)
+                }
+                Text("tied together, however far apart")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .opacity(threadDrawn ? 1 : 0)
             }
         }
         .onAppear {
             rings = true
             withAnimation(.easeInOut(duration: 0.42).repeatForever(autoreverses: true)) { beat = true }
+            withAnimation(.easeInOut(duration: 1.1).delay(0.2)) { threadDrawn = true }
         }
         .accessibilityElement()
-        .accessibilityLabel("Pulse and Plan")
+        .accessibilityLabel("Red Thread")
     }
 }
 
