@@ -114,6 +114,9 @@ create table if not exists profiles (
 alter table locations add column if not exists activity text;
 alter table locations add column if not exists speed double precision;
 alter table locations add column if not exists location_off boolean not null default false;
+-- v1.3: heading and GPS accuracy so the other phone can glide the pin smoothly.
+alter table locations add column if not exists course double precision;
+alter table locations add column if not exists accuracy double precision;
 
 -- v1.1 upgrade for databases created with the v1.0 schema (safe to run on a fresh one too).
 alter table game_sessions drop constraint if exists game_sessions_game_check;

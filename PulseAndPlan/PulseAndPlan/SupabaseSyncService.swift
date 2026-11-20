@@ -151,6 +151,7 @@ final class SupabaseSyncService: SyncService {
             "precision_mode": l.precision.rawValue, "battery_level": orNull(l.battery),
             "place_label": orNull(l.placeLabel), "city": orNull(l.city), "updated_at": Self.iso(l.updatedAt),
             "activity": orNull(l.activity?.rawValue), "speed": orNull(l.speed), "location_off": l.locationOff ?? false,
+            "course": orNull(l.course), "accuracy": orNull(l.accuracy),
         ])
     }
 
@@ -475,7 +476,8 @@ final class SupabaseSyncService: SyncService {
                              placeLabel: r["place_label"] as? String, city: r["city"] as? String,
                              updatedAt: date(r["updated_at"]) ?? Date(),
                              activity: (r["activity"] as? String).flatMap(PartnerActivity.init(rawValue:)),
-                             speed: number(r["speed"])?.doubleValue, locationOff: r["location_off"] as? Bool)
+                             speed: number(r["speed"])?.doubleValue, locationOff: r["location_off"] as? Bool,
+                             course: number(r["course"])?.doubleValue, accuracy: number(r["accuracy"])?.doubleValue)
     }
 
     private func game(_ r: Row) -> GameState? {

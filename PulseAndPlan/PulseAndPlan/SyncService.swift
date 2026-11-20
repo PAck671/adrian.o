@@ -76,7 +76,7 @@ final class DemoPartnerService: SyncService {
             while !Task.isCancelled {
                 guard let self else { return }
                 self.step()
-                try? await Task.sleep(for: .seconds(3))
+                try? await Task.sleep(for: .seconds(2))
             }
         }
     }
@@ -96,18 +96,26 @@ final class DemoPartnerService: SyncService {
     }
 
     /// Partner walks Home → Campus → Home on a loop, pausing at each end (arrival badges).
+    /// 2 s ticks, 300 s loop: 30 s at Home, a ~250 m walk (2 min, ~2 m/s) to Campus, 30 s there, and back.
+    /// Every third loop they bike it in half the time.
     private func step() {
         tick += 1
-        let c = tick % 50
-        let p: Double = c < 10 ? 0 : c < 25 ? Double(c - 10) / 15 : c < 35 ? 1 : 1 - Double(c - 35) / 15
-        let wobble = sin(p * .pi) * 0.004
-        let lat = city.lat + 0.012 * p + wobble
-        let lng = city.lng + 0.018 * p - wobble
+        let c = tick % 150
+        let cycling = (tick / 150) % 3 == 2
+        func leg(_ ticks: Int) -> Double { min(1, Double(ticks) / (cycling ? 30 : 60)) }
+        let p: Double = c < 15 ? 0 : c < 75 ? leg(c - 15) : c < 90 ? 1 : 1 - leg(c - 90)
+        let dLat = 0.0016, dLng = 0.0022
+        let wobble = sin(p * .pi) * 0.0004
+        let lat = city.lat + dLat * p + wobble
+        let lng = city.lng + dLng * p - wobble
+        let moving = p > 0 && p < 1
+        let bearing = atan2(dLng * cos(city.lat * .pi / 180), dLat) * 180 / .pi
+        let course = c < 75 ? bearing : (bearing + 180).truncatingRemainder(dividingBy: 360)
         // Drains while out until ~4%, then "plugs in" so the low-battery alert is easy to see in Demo mode.
         if charging {
             battery = min(95, battery + 3)
             if battery >= 95 { charging = false }
-        } else if tick % 2 == 0, p > 0 {
+        } else if tick % 5 == 0, p > 0 {
             battery -= 1
             if battery <= 4 { charging = true }
         }
@@ -115,18 +123,17 @@ final class DemoPartnerService: SyncService {
         if let ghostUntil, Date() < ghostUntil {
             emit(.location(LocationShare(userId: Self.partnerId, precision: .ghost)))
         } else {
-            // Partner walks most loops and bikes every third; at rest they sit, or lie down late at night their time.
+            // At rest they sit, or lie down late at night their time.
             var cal = Calendar(identifier: .gregorian)
             cal.timeZone = TimeZone(identifier: city.timeZone) ?? .current
             let night = (cal.component(.hour, from: Date()) + 2) % 24 < 9 // 22:00–07:00
-            let cycling = (tick / 50) % 3 == 2
-            let activity: PartnerActivity = p > 0 && p < 1 ? (cycling ? .cycling : .walking) : p == 0 && night ? .lyingDown : .sitting
-            let speed: Double? = activity == .cycling ? 4.6 : activity == .walking ? 1.4 : 0
+            let activity: PartnerActivity = moving ? (cycling ? .cycling : .walking) : p == 0 && night ? .lyingDown : .sitting
             emit(.location(LocationShare(userId: Self.partnerId, lat: lat, lng: lng, precision: .live,
                                          battery: battery, placeLabel: label, city: city.name,
-                                         activity: activity, speed: speed)))
+                                         activity: activity, speed: moving ? (cycling ? 4.2 : 2.1) : 0,
+                                         course: moving ? course : nil, accuracy: moving ? 6 : 25)))
         }
-        if tick % 25 == 12 {
+        if tick % 40 == 20 {
             let pattern = [PulsePattern.heartbeat, .doubleSqueeze, .tap, .morseTap].randomElement() ?? .heartbeat
             emit(.pulse(Pulse(senderId: Self.partnerId, pattern: pattern)))
         }

@@ -246,6 +246,8 @@ struct LocationShare: Codable, Equatable {
     var activity: PartnerActivity?
     var speed: Double?           // m/s, Live mode only
     var locationOff: Bool?       // Location Services were switched off on their phone
+    var course: Double?          // degrees from north, Live mode only
+    var accuracy: Double?        // meters (horizontal), Live mode only
 
     var coordinate: CLLocationCoordinate2D? {
         guard let lat, let lng else { return nil }

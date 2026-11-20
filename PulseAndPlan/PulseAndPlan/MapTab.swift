@@ -3,50 +3,74 @@ import SwiftUI
 
 struct MapTab: View {
     @Environment(AppState.self) private var state
+    @Environment(\.isActiveTab) private var isActiveTab
     @State private var camera: MapCameraPosition = .automatic
     @State private var showPlaces = false
+    @State private var partnerGlide = Glide()
+    @State private var myGlide = Glide()
+    @State private var glideUntil = Date.distantPast
+    @State private var gliding = false
     @Namespace private var pillSpace
 
     var body: some View {
         let partner = state.partnerLocation
         let settings = state.settings
         ZStack {
-            Map(position: $camera) {
-                ForEach(state.savedPlaces) { place in
-                    Annotation(place.name, coordinate: place.coordinate) {
-                        Text(place.emoji).font(.title3).padding(4).background(Circle().fill(.black.opacity(0.6)))
+            // Redraw at ~30 fps only while a pin is gliding between fixes; idle otherwise.
+            TimelineView(.animation(minimumInterval: 1 / 30, paused: !isActiveTab || !gliding)) { context in
+                let now = context.date
+                let me = state.myCoordinate.map { myGlide.position(at: now) ?? $0 }
+                let them = partner?.coordinate.map { partnerGlide.position(at: now) ?? $0 }
+                Map(position: $camera) {
+                    ForEach(state.savedPlaces) { place in
+                        Annotation(place.name, coordinate: place.coordinate) {
+                            Text(place.emoji).font(.title3).padding(4).background(Circle().fill(.black.opacity(0.6)))
+                        }
+                    }
+                    if let me {
+                        if settings.precision == .fuzzy {
+                            MapCircle(center: me.fuzzed(), radius: 3000)
+                                .foregroundStyle(.indigo.opacity(0.15))
+                                .stroke(.indigo.opacity(0.6), lineWidth: 1)
+                        }
+                        Annotation(settings.myName, coordinate: me) {
+                            AvatarPin(isMe: true, color: .indigo, dimmed: settings.precision == .ghost)
+                        }
+                    }
+                    if let them {
+                        if partner?.precision == .fuzzy {
+                            MapCircle(center: them, radius: 3000)
+                                .foregroundStyle(.tint.opacity(0.15))
+                                .stroke(.tint.opacity(0.6), lineWidth: 1)
+                        } else if let accuracy = partner?.accuracy, accuracy > 15 {
+                            // Find My-style halo: how sure the GPS is about this spot.
+                            MapCircle(center: them, radius: min(accuracy, 500))
+                                .foregroundStyle(.tint.opacity(0.12))
+                        }
+                        Annotation(settings.partnerName, coordinate: them) {
+                            AvatarPin(isMe: false, color: state.theme.accent,
+                                      badge: partner?.placeLabel ?? partner?.activity.map { "\($0.emoji) \($0.label)" })
+                        }
+                        if let me {
+                            MapPolyline(coordinates: [me, them], contourStyle: .geodesic)
+                                .stroke(LinearGradient(colors: [.indigo, .pink], startPoint: .leading, endPoint: .trailing),
+                                        style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [8, 6]))
+                        }
                     }
                 }
-                if let me = state.myCoordinate {
-                    if settings.precision == .fuzzy {
-                        MapCircle(center: me.fuzzed(), radius: 3000)
-                            .foregroundStyle(.indigo.opacity(0.15))
-                            .stroke(.indigo.opacity(0.6), lineWidth: 1)
-                    }
-                    Annotation(settings.myName, coordinate: me) {
-                        AvatarPin(isMe: true, color: .indigo, dimmed: settings.precision == .ghost)
-                    }
-                }
-                if let p = partner?.coordinate {
-                    if partner?.precision == .fuzzy {
-                        MapCircle(center: p, radius: 3000)
-                            .foregroundStyle(.tint.opacity(0.15))
-                            .stroke(.tint.opacity(0.6), lineWidth: 1)
-                    }
-                    Annotation(settings.partnerName, coordinate: p) {
-                        AvatarPin(isMe: false, color: state.theme.accent, badge: partner?.placeLabel ?? partner?.activity.map { "\($0.emoji) \($0.label)" })
-                    }
-                    if let me = state.myCoordinate {
-                        MapPolyline(coordinates: [me, p], contourStyle: .geodesic)
-                            .stroke(LinearGradient(colors: [.indigo, .pink], startPoint: .leading, endPoint: .trailing),
-                                    style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [8, 6]))
-                    }
+                .mapStyle(.standard(pointsOfInterest: .excludingAll))
+                .mapControls {
+                    MapCompass()
+                    MapScaleView()
                 }
             }
-            .mapStyle(.standard(pointsOfInterest: .excludingAll))
-            .mapControls {
-                MapCompass()
-                MapScaleView()
+            .onChange(of: partner?.updatedAt) {
+                guard let p = state.partnerLocation?.coordinate else { return }
+                startGlide(&partnerGlide, to: p)
+            }
+            .onChange(of: state.location.lastLocation) {
+                guard let me = state.myCoordinate else { return }
+                startGlide(&myGlide, to: me)
             }
 
             VStack {
@@ -57,6 +81,18 @@ struct MapTab: View {
             .padding()
         }
         .sheet(isPresented: $showPlaces) { SavedPlacesSheet() }
+    }
+
+    private func startGlide(_ glide: inout Glide, to target: CLLocationCoordinate2D) {
+        let now = Date()
+        glide.retarget(to: target, now: now)
+        let duration = glide.duration
+        glideUntil = max(glideUntil, now.addingTimeInterval(duration + 0.1))
+        gliding = true
+        Task {
+            try? await Task.sleep(for: .seconds(duration + 0.15))
+            if Date() >= glideUntil { gliding = false }
+        }
     }
 
     // MARK: Privacy pill
@@ -287,5 +323,40 @@ struct SavedPlacesSheet: View {
             .navigationTitle("Saved Places")
             .toolbar { Button("Done") { dismiss() } }
         }
+    }
+}
+
+// MARK: - Smooth pin movement
+
+/// Slides a pin from where it's drawn now to the newest fix over about one update interval, so it
+/// moves like Find My instead of teleporting. Jumps over 2 km snap (e.g. reconnecting after a flight).
+struct Glide {
+    private var from: CLLocationCoordinate2D?
+    private var to: CLLocationCoordinate2D?
+    private var start = Date.distantPast
+    private(set) var duration: TimeInterval = 0
+    private var lastFix: Date?
+
+    func position(at date: Date) -> CLLocationCoordinate2D? {
+        guard let to else { return nil }
+        guard let from, duration > 0 else { return to }
+        let t = min(max(date.timeIntervalSince(start) / duration, 0), 1)
+        return CLLocationCoordinate2D(latitude: from.latitude + (to.latitude - from.latitude) * t,
+                                      longitude: from.longitude + (to.longitude - from.longitude) * t)
+    }
+
+    mutating func retarget(to target: CLLocationCoordinate2D, now: Date) {
+        let current = position(at: now)
+        let interval = lastFix.map { now.timeIntervalSince($0) } ?? 0
+        lastFix = now
+        if let current, current.distance(to: target) < 2000 {
+            from = current
+            duration = min(max(interval, 0.4), 6) // glide for as long as the gap between fixes
+        } else {
+            from = nil
+            duration = 0
+        }
+        to = target
+        start = now
     }
 }

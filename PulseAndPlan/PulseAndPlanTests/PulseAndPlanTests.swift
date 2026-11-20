@@ -126,6 +126,19 @@ final class PulseAndPlanTests: XCTestCase {
         XCTAssertTrue(game.board[BlockDrop.height - 1].allSatisfy { $0 == 0 })
     }
 
+    func testGlideSlidesBetweenFixesAndSnapsOnBigJumps() throws {
+        var glide = Glide()
+        let t0 = Date()
+        glide.retarget(to: CLLocationCoordinate2D(latitude: 35.0, longitude: 139.0), now: t0)
+        XCTAssertEqual(try XCTUnwrap(glide.position(at: t0)).latitude, 35.0, accuracy: 1e-9) // first fix snaps
+        glide.retarget(to: CLLocationCoordinate2D(latitude: 35.001, longitude: 139.0), now: t0 + 2) // ~111 m
+        XCTAssertEqual(glide.duration, 2, accuracy: 1e-6)
+        XCTAssertEqual(try XCTUnwrap(glide.position(at: t0 + 3)).latitude, 35.0005, accuracy: 1e-7)  // halfway
+        XCTAssertEqual(try XCTUnwrap(glide.position(at: t0 + 10)).latitude, 35.001, accuracy: 1e-9)  // no overshoot
+        glide.retarget(to: CLLocationCoordinate2D(latitude: 36.0, longitude: 139.0), now: t0 + 12)   // ~110 km jump
+        XCTAssertEqual(try XCTUnwrap(glide.position(at: t0 + 12)).latitude, 36.0, accuracy: 1e-9)
+    }
+
     func testActivityClassifier() {
         let c = MotionSense.classify
         // Motion coprocessor + GPS speed

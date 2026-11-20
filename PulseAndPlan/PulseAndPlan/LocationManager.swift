@@ -38,6 +38,29 @@ final class LocationManager: NSObject, CLLocationManagerDelegate {
         (Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String])?.contains("location") == true
     }
 
+    /// Battery mode while you sit still; GPS-grade fixes only while the sensors say you're moving.
+    enum Tracking { case battery, walking, vehicle }
+    @ObservationIgnored private(set) var tracking: Tracking = .battery
+
+    func setTracking(_ mode: Tracking) {
+        guard mode != tracking else { return }
+        tracking = mode
+        switch mode {
+        case .battery:
+            manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+            manager.distanceFilter = 50
+            manager.activityType = .other
+        case .walking:
+            manager.desiredAccuracy = kCLLocationAccuracyBest
+            manager.distanceFilter = 5
+            manager.activityType = .fitness
+        case .vehicle:
+            manager.desiredAccuracy = kCLLocationAccuracyBest
+            manager.distanceFilter = 15
+            manager.activityType = .automotiveNavigation
+        }
+    }
+
     var canUpgradeToAlways: Bool { authorization == .authorizedWhenInUse }
     var isDenied: Bool { authorization == .denied || authorization == .restricted }
 
@@ -78,6 +101,9 @@ final class LocationManager: NSObject, CLLocationManagerDelegate {
     }
 
     private func handle(_ location: CLLocation) {
+        // While moving, drop noisy fixes (Wi-Fi/cell guesses) that would yank the pin sideways.
+        guard location.horizontalAccuracy >= 0 else { return }
+        if tracking != .battery, location.horizontalAccuracy > 65, lastLocation != nil { return }
         lastLocation = location
         onUpdate?(location)
         // Geocoding is rate-limited by Apple; only refresh after moving ~1 km.

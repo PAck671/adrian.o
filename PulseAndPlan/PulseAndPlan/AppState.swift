@@ -65,13 +65,16 @@ final class AppState {
         started = true
         UIDevice.current.isBatteryMonitoringEnabled = true
         location.onUpdate = { [weak self] location in
-            self?.motion.updateSpeed(location.speed)
-            self?.publish(location)
+            guard let self else { return }
+            self.motion.updateSpeed(location.speed)
+            if !self.motion.running { self.updateTracking(speed: location.speed) } // no motion data: go by GPS speed
+            self.publish(location)
         }
         location.onAuthorizationChange = { [weak self] in self?.authorizationChanged($0) }
-        motion.onChange = { [weak self] _ in
-            guard let self, let last = self.location.lastLocation else { return }
-            self.publish(last) // posture changes while sitting still never trigger a location update
+        motion.onChange = { [weak self] activity in
+            guard let self else { return }
+            self.updateTracking(activity: activity)
+            if let last = self.location.lastLocation { self.publish(last) } // posture changes never move the phone
         }
         location.keepAlive = settings.stayConnected
         restartSync()
@@ -485,18 +488,51 @@ final class AppState {
         if mode == .ghost {
             location.stop()
             motion.stop()
+            location.setTracking(.battery)
             sync?.sendLocation(LocationShare(userId: settings.deviceId, precision: .ghost))
         } else {
             settings.sharingEnabled = true
             location.start()
             if settings.shareActivity { motion.start() }
+            updateTracking(activity: motion.activity)
             if let last = location.lastLocation { publish(last) }
         }
     }
 
+    /// Precise GPS only in Live mode and only while moving; Fuzzy never needs better than 100 m.
+    private func updateTracking(activity: PartnerActivity?) {
+        guard settings.precision == .live else { return location.setTracking(.battery) }
+        switch activity {
+        case .walking?, .running?, .cycling?: location.setTracking(.walking)
+        case .driving?, .train?: location.setTracking(.vehicle)
+        default: location.setTracking(.battery) // still, or flying (GPS is useless in a plane)
+        }
+    }
+
+    private func updateTracking(speed: Double) {
+        guard speed >= 0 else { return }
+        updateTracking(activity: speed > 7 ? .driving : speed > 0.8 ? .walking : nil)
+    }
+
+    @ObservationIgnored private var lastPublish = Date.distantPast
+    @ObservationIgnored private var trailingPublish: Task<Void, Never>?
+
+    /// At most one write every 2 s while moving fast; the last fix is always sent (trailing edge).
     private func publish(_ loc: CLLocation) {
+        trailingPublish?.cancel()
+        let wait = 2 - Date().timeIntervalSince(lastPublish)
+        guard wait > 0 else { return sendShare(loc) }
+        trailingPublish = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(wait))
+            guard !Task.isCancelled else { return }
+            self?.sendShare(loc)
+        }
+    }
+
+    private func sendShare(_ loc: CLLocation) {
         let mode = settings.precision
         guard mode != .ghost else { return }
+        lastPublish = Date()
         let coord = mode == .fuzzy ? loc.coordinate.fuzzed() : loc.coordinate
         // Fuzzy hides saved-place badges and the neighborhood: they would undo the 3 km blur.
         let place = mode == .live ? savedPlaces.first { $0.coordinate.distance(to: loc.coordinate) <= $0.radius } : nil
@@ -506,7 +542,9 @@ final class AppState {
         sync?.sendLocation(LocationShare(userId: settings.deviceId, lat: coord.latitude, lng: coord.longitude,
                                          precision: mode, battery: batteryPercent,
                                          placeLabel: place.map { "At \($0.name)" }, city: city,
-                                         activity: settings.shareActivity ? motion.activity : nil, speed: speed))
+                                         activity: settings.shareActivity ? motion.activity : nil, speed: speed,
+                                         course: mode == .live && loc.course >= 0 ? loc.course : nil,
+                                         accuracy: mode == .live ? loc.horizontalAccuracy : nil))
     }
 
     var myCoordinate: CLLocationCoordinate2D? { location.lastLocation?.coordinate }
