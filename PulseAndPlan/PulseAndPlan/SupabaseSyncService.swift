@@ -230,9 +230,13 @@ final class SupabaseSyncService: SyncService {
 
     private func json(_ object: Row) -> Data? { try? JSONSerialization.data(withJSONObject: object) }
 
+    /// Legacy anon keys are JWTs and double as the bearer token; new publishable keys (sb_publishable_…)
+    /// are not JWTs and Supabase rejects them in Authorization, so they go in `apikey` only.
+    private var keyIsJWT: Bool { key.hasPrefix("eyJ") }
+
     private func authorize(_ request: inout URLRequest) {
         request.setValue(key, forHTTPHeaderField: "apikey")
-        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        if keyIsJWT { request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization") }
     }
 
     private func check(_ response: URLResponse, _ data: Data) throws {
@@ -284,8 +288,9 @@ final class SupabaseSyncService: SyncService {
              "filter": "\(table == "couples" ? "code" : "couple_code")=eq.\(code)"]
         }
         joinRef = String(ref + 1)
-        push("phx_join", ["config": ["broadcast": ["self": false], "presence": ["key": ""], "postgres_changes": changes],
-                          "access_token": key])
+        var join: Row = ["config": ["broadcast": ["self": false], "presence": ["key": ""], "postgres_changes": changes]]
+        if keyIsJWT { join["access_token"] = key } // publishable keys authorize via the apikey URL parameter alone
+        push("phx_join", join)
 
         listener?.cancel()
         listener = Task { [weak self] in
