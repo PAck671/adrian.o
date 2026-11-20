@@ -107,6 +107,59 @@ struct ToastView: View {
     }
 }
 
+// MARK: - Profile photos
+
+/// Profile photo, or the emoji when there isn't one.
+struct AvatarView: View {
+    @Environment(AppState.self) private var state
+    let isMe: Bool
+    var size: CGFloat = 44
+
+    var body: some View {
+        let photo = isMe ? state.myPhoto : state.partnerPhoto
+        ZStack {
+            Circle().fill(.ultraThinMaterial)
+            if let photo {
+                Image(uiImage: photo).resizable().scaledToFill()
+            } else {
+                Text(isMe ? state.settings.myAvatar : state.settings.partnerAvatar).font(.system(size: size * 0.6))
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+        .accessibilityLabel(isMe ? "Your photo" : "\(state.settings.partnerName)'s photo")
+    }
+}
+
+struct PhotoRow: View {
+    @Environment(AppState.self) private var state
+    let isMe: Bool
+    @State private var item: PhotosPickerItem?
+
+    var body: some View {
+        let hasPhoto = (isMe ? state.myPhoto : state.partnerPhoto) != nil
+        HStack(spacing: 14) {
+            AvatarView(isMe: isMe, size: 52)
+            PhotosPicker(selection: $item, matching: .images) {
+                Text(hasPhoto ? "Change \(isMe ? "your" : "partner's") photo" : "Add \(isMe ? "your" : "partner's") photo")
+            }
+            Spacer()
+            if hasPhoto {
+                Button(role: .destructive) { state.removePhoto(me: isMe) } label: { Image(systemName: "trash") }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Remove photo")
+            }
+        }
+        .onChange(of: item) { _, picked in
+            guard let picked else { return }
+            Task {
+                if let data = try? await picked.loadTransferable(type: Data.self) { state.setPhoto(data, me: isMe) }
+                item = nil
+            }
+        }
+    }
+}
+
 // MARK: - Persistent partner header
 
 struct PartnerHeader: View {
@@ -117,10 +170,7 @@ struct PartnerHeader: View {
         let s = state.settings
         HStack(spacing: 12) {
             ZStack(alignment: .bottomTrailing) {
-                Text(s.partnerAvatar)
-                    .font(.system(size: 28))
-                    .frame(width: 46, height: 46)
-                    .background(Circle().fill(.ultraThinMaterial))
+                AvatarView(isMe: false, size: 46)
                     .overlay(Circle().stroke(.tint.opacity(0.6), lineWidth: 2))
                 Circle()
                     .fill(state.partnerOnline ? Color.green : Color.gray)
@@ -192,8 +242,13 @@ struct PartnerHeader: View {
 
     private var partnerStatus: String? {
         guard let loc = state.partnerLocation else { return nil }
+        if loc.locationOff == true { return "⚠️ Location off" }
         if loc.precision == .ghost { return "👻 Ghost mode" }
-        return loc.placeLabel ?? loc.city
+        let place = loc.placeLabel ?? loc.city
+        guard let activity = loc.activity else { return place }
+        let doing = "\(activity.emoji) \(activity.label)" + (activity.isMoving && (loc.speed ?? 0) > 0.5
+            ? " · \(formatSpeed(loc.speed ?? 0, miles: state.settings.useMiles))" : "")
+        return [place, doing].compactMap { $0 }.joined(separator: " · ")
     }
 
     private func batterySymbol(_ level: Int) -> String {
@@ -272,15 +327,19 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("You two") {
+                Section {
+                    PhotoRow(isMe: true)
                     TextField("Your name", text: $state.settings.myName)
-                    TextField("Your avatar emoji", text: $state.settings.myAvatar)
+                    TextField("Your emoji (shown without a photo)", text: $state.settings.myAvatar)
+                    PhotoRow(isMe: false)
                     TextField("Partner's name", text: $state.settings.partnerName)
-                    TextField("Partner's avatar emoji", text: $state.settings.partnerAvatar)
+                    TextField("Partner's emoji", text: $state.settings.partnerAvatar)
                     TextField("Partner's phone or iMessage email", text: $state.settings.partnerPhone)
                         .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                } header: { Text("You two") } footer: {
+                    Text("Your photo syncs to your partner in Live Pair mode. A partner photo you pick here stays on this phone until they set their own.")
                 }
 
                 Section {
@@ -288,6 +347,7 @@ struct SettingsView: View {
                     Toggle("Low battery (15% and 5%)", isOn: $state.settings.alertBattery)
                     Toggle("Arrives at a saved place", isOn: $state.settings.alertArrivals)
                     Toggle("Gets within 1 km", isOn: $state.settings.alertNearby)
+                    Toggle("Goes Ghost or turns off location", isOn: $state.settings.alertPrivacy)
                     Toggle("Stay connected in background", isOn: $state.settings.stayConnected)
                     Button("Send test alerts") { state.sendTestAlerts() }
                 } header: { Text("Alerts about \(state.settings.partnerName)") } footer: {
@@ -313,7 +373,13 @@ struct SettingsView: View {
                     if state.location.isDenied, let url = URL(string: UIApplication.openSettingsURLString) {
                         Button("Open iOS Settings") { openURL(url) }
                     }
-                } header: { Text("Location") }
+                    Toggle("Share what I'm doing", isOn: $state.settings.shareActivity)
+                    if let mine = state.motion.activity {
+                        LabeledContent("Right now", value: "\(mine.emoji) \(mine.label.replacingOccurrences(of: "their", with: "your"))")
+                    }
+                } header: { Text("Location") } footer: {
+                    Text("Uses the motion coprocessor, gyroscope and accelerometer to guess sitting, lying down, on your phone, walking, cycling, in a car, on a train or flying. Your partner sees the guess, never raw sensor data. Ghost mode shares nothing, and your partner is told when you go Ghost or switch Location Services off.")
+                }
 
                 Section {
                     ServicePicker(selection: $state.settings.services)

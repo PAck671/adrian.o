@@ -107,7 +107,7 @@ struct PulseTab: View {
                     .fill(LinearGradient(colors: mine ? [.indigo, .purple] : [.pink, .orange],
                                          startPoint: .topLeading, endPoint: .bottomTrailing))
                     .frame(width: 74, height: 74)
-                    .overlay(Text(mine ? state.settings.myAvatar : state.settings.partnerAvatar).font(.system(size: 32)))
+                    .overlay(AvatarView(isMe: mine, size: 64))
                     .overlay(Image(systemName: "play.fill").font(.caption).foregroundStyle(.white).offset(y: 26))
                 if let reaction = clip.reaction { Text(reaction).font(.title3) }
             }

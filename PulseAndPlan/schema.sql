@@ -101,6 +101,20 @@ create table if not exists notices (
   created_at   timestamptz not null default now()
 );
 
+create table if not exists profiles (
+  couple_code  text not null references couples(code) on delete cascade,
+  user_id      uuid not null,
+  name         text,
+  avatar_path  text,
+  updated_at   timestamptz not null default now(),
+  primary key (couple_code, user_id)
+);
+
+-- v1.2: what the phone's motion sensors suggest (sitting, walking, in a car…), speed, and Location Services off.
+alter table locations add column if not exists activity text;
+alter table locations add column if not exists speed double precision;
+alter table locations add column if not exists location_off boolean not null default false;
+
 -- v1.1 upgrade for databases created with the v1.0 schema (safe to run on a fresh one too).
 alter table game_sessions drop constraint if exists game_sessions_game_check;
 alter table game_sessions add constraint game_sessions_game_check
@@ -110,7 +124,7 @@ alter table game_sessions add constraint game_sessions_game_check
 do $$
 declare t text;
 begin
-  foreach t in array array['couples','pulses','videos','movie_swipes','game_sessions','events','locations','notes','notices'] loop
+  foreach t in array array['couples','pulses','videos','movie_swipes','game_sessions','events','locations','notes','notices','profiles'] loop
     if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = t) then
       execute format('alter publication supabase_realtime add table %I', t);
     end if;
@@ -121,7 +135,7 @@ end $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['couples','pulses','videos','movie_swipes','game_sessions','events','locations','notes','notices'] loop
+  foreach t in array array['couples','pulses','videos','movie_swipes','game_sessions','events','locations','notes','notices','profiles'] loop
     execute format('alter table %I enable row level security', t);
     execute format('drop policy if exists "anon couple access" on %I', t);
     execute format('create policy "anon couple access" on %I for all to anon using (true) with check (true)', t);
@@ -137,3 +151,15 @@ drop policy if exists "anon upload videos" on storage.objects;
 create policy "anon upload videos" on storage.objects for insert to anon with check (bucket_id = 'videos');
 drop policy if exists "anon read videos" on storage.objects;
 create policy "anon read videos" on storage.objects for select to anon using (bucket_id = 'videos');
+
+-- Profile photo bucket (public read; x-upsert replaces your photo in place).
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('avatars', 'avatars', true, 2097152, array['image/jpeg'])
+on conflict (id) do nothing;
+
+drop policy if exists "anon upload avatars" on storage.objects;
+create policy "anon upload avatars" on storage.objects for insert to anon with check (bucket_id = 'avatars');
+drop policy if exists "anon replace avatars" on storage.objects;
+create policy "anon replace avatars" on storage.objects for update to anon using (bucket_id = 'avatars');
+drop policy if exists "anon read avatars" on storage.objects;
+create policy "anon read avatars" on storage.objects for select to anon using (bucket_id = 'avatars');

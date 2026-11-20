@@ -33,6 +33,48 @@ struct AppSettings: Codable, Equatable {
     var stayConnected = false
     var services: [String] = []
     var syncCalendar = false
+    var alertPrivacy = true      // partner goes Ghost / turns Location Services off
+    var shareActivity = true     // send sitting / walking / driving… with my location
+}
+
+// MARK: - Activity (what the phone's sensors suggest you're doing)
+
+enum PartnerActivity: String, Codable, CaseIterable {
+    case sitting, onPhone, lyingDown, phoneDown, walking, running, cycling, driving, train, flying
+    var label: String {
+        switch self {
+        case .sitting: "Sitting"
+        case .onPhone: "On their phone"
+        case .lyingDown: "Lying down"
+        case .phoneDown: "Phone set down"
+        case .walking: "Walking"
+        case .running: "Running"
+        case .cycling: "Cycling"
+        case .driving: "In a car"
+        case .train: "On a train"
+        case .flying: "Flying"
+        }
+    }
+    var emoji: String {
+        switch self {
+        case .sitting: "🪑"
+        case .onPhone: "📱"
+        case .lyingDown: "🛌"
+        case .phoneDown: "📵"
+        case .walking: "🚶"
+        case .running: "🏃"
+        case .cycling: "🚴"
+        case .driving: "🚗"
+        case .train: "🚄"
+        case .flying: "✈️"
+        }
+    }
+    var isMoving: Bool { [.walking, .running, .cycling, .driving, .train, .flying].contains(self) }
+}
+
+func formatSpeed(_ metersPerSecond: Double, miles: Bool) -> String {
+    let value = metersPerSecond * (miles ? 2.236_94 : 3.6)
+    return "\(Int(value.rounded())) \(miles ? "mph" : "km/h")"
 }
 
 // MARK: - Streaming services
@@ -201,6 +243,9 @@ struct LocationShare: Codable, Equatable {
     var placeLabel: String?
     var city: String?
     var updatedAt = Date()
+    var activity: PartnerActivity?
+    var speed: Double?           // m/s, Live mode only
+    var locationOff: Bool?       // Location Services were switched off on their phone
 
     var coordinate: CLLocationCoordinate2D? {
         guard let lat, let lng else { return nil }
@@ -363,6 +408,7 @@ enum SyncEvent {
     case notice(PartnerNotice)
     case noteUpserted(SharedNote)
     case noteDeleted(UUID)
+    case profile(userId: UUID, avatarURL: URL)
 }
 
 // MARK: - Demo cities

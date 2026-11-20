@@ -20,6 +20,7 @@ protocol SyncService: AnyObject {
     func sendNotice(_ notice: PartnerNotice)
     func saveNote(_ note: SharedNote)
     func deleteNote(_ id: UUID)
+    func sendAvatar(_ jpeg: Data) async throws
 }
 
 // MARK: - Demo / Solo Test partner
@@ -40,6 +41,14 @@ final class DemoPartnerService: SyncService {
     private var battery = 31
     private var charging = false
     private var repliedNotes: Set<UUID> = []
+    private var ghostUntil: Date?
+
+    /// Demo only: the partner goes Ghost for a while so the privacy alerts can be seen.
+    func simulateGhost(after delay: Double, for seconds: Double) {
+        after(delay) { [weak self] in self?.ghostUntil = Date().addingTimeInterval(seconds) }
+    }
+
+    func sendAvatar(_ jpeg: Data) async throws {}
 
     init(city: DemoCity, partnerName: String, missedSince: Date?, sendWelcomeClip: Bool, seedNote: Bool) {
         self.city = city
@@ -103,8 +112,20 @@ final class DemoPartnerService: SyncService {
             if battery <= 4 { charging = true }
         }
         let label = p == 0 ? "At Home" : p == 1 ? "At Campus" : nil
-        emit(.location(LocationShare(userId: Self.partnerId, lat: lat, lng: lng, precision: .live,
-                                     battery: battery, placeLabel: label, city: city.name)))
+        if let ghostUntil, Date() < ghostUntil {
+            emit(.location(LocationShare(userId: Self.partnerId, precision: .ghost)))
+        } else {
+            // Partner walks most loops and bikes every third; at rest they sit, or lie down late at night their time.
+            var cal = Calendar(identifier: .gregorian)
+            cal.timeZone = TimeZone(identifier: city.timeZone) ?? .current
+            let night = (cal.component(.hour, from: Date()) + 2) % 24 < 9 // 22:00–07:00
+            let cycling = (tick / 50) % 3 == 2
+            let activity: PartnerActivity = p > 0 && p < 1 ? (cycling ? .cycling : .walking) : p == 0 && night ? .lyingDown : .sitting
+            let speed: Double? = activity == .cycling ? 4.6 : activity == .walking ? 1.4 : 0
+            emit(.location(LocationShare(userId: Self.partnerId, lat: lat, lng: lng, precision: .live,
+                                         battery: battery, placeLabel: label, city: city.name,
+                                         activity: activity, speed: speed)))
+        }
         if tick % 25 == 12 {
             let pattern = [PulsePattern.heartbeat, .doubleSqueeze, .tap, .morseTap].randomElement() ?? .heartbeat
             emit(.pulse(Pulse(senderId: Self.partnerId, pattern: pattern)))

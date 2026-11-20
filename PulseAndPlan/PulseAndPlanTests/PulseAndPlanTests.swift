@@ -126,6 +126,30 @@ final class PulseAndPlanTests: XCTestCase {
         XCTAssertTrue(game.board[BlockDrop.height - 1].allSatisfy { $0 == 0 })
     }
 
+    func testActivityClassifier() {
+        let c = MotionSense.classify
+        // Motion coprocessor + GPS speed
+        XCTAssertEqual(c(.walking, 1.4, -0.5, false, 14), .walking)
+        XCTAssertEqual(c(.automotive, 25, -0.5, false, 14), .driving)
+        XCTAssertEqual(c(.automotive, 70, -0.5, false, 14), .train)   // 252 km/h on rails
+        XCTAssertEqual(c(.stationary, 240, -0.5, true, 14), .flying)  // 864 km/h cruise
+        XCTAssertEqual(c(.automotive, 88, -0.5, false, 14), .train)   // 317 km/h Shinkansen is still a train
+        XCTAssertEqual(c(.cycling, 5, -0.5, false, 14), .cycling)
+        // No coprocessor: speed alone
+        XCTAssertEqual(c(.unknown, 15, -0.5, false, 14), .driving)
+        XCTAssertEqual(c(.unknown, 1.2, -0.5, false, 14), .walking)
+        // Posture while stationary
+        XCTAssertEqual(c(.stationary, nil, -0.98, true, 23), .lyingDown) // flat on the nightstand at night
+        XCTAssertEqual(c(.stationary, nil, -0.98, true, 14), .phoneDown) // flat on a desk by day
+        XCTAssertEqual(c(.stationary, nil, 0.97, true, 14), .phoneDown)  // face-down
+        XCTAssertEqual(c(.stationary, nil, -0.2, true, 14), .sitting)    // resting at an angle
+        XCTAssertEqual(c(.stationary, nil, -0.6, false, 14), .onPhone)   // held, screen toward face
+        XCTAssertEqual(c(.stationary, nil, 0.7, false, 1), .lyingDown)   // held overhead in bed
+        XCTAssertEqual(c(.stationary, nil, 0.1, false, 14), .sitting)    // upright in a pocket
+        XCTAssertTrue(MotionSense.isStill(rotation: 0.005, acceleration: 0.004))
+        XCTAssertFalse(MotionSense.isStill(rotation: 0.12, acceleration: 0.01)) // hand tremor
+    }
+
     func testOldSettingsKeepDeviceIdWhenFieldsAreAdded() throws {
         var old = AppSettings()
         old.myName = "Robin"

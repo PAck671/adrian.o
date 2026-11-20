@@ -14,6 +14,7 @@ final class AppState {
                 restartSync()
             }
             location.keepAlive = settings.stayConnected
+            if settings.shareActivity != oldValue.shareActivity { resumeSharingIfNeeded() }
         }
     }
     var theme: ThemeSettings = Persist.load("theme", default: ThemeSettings()) { didSet { Persist.save(theme, "theme") } }
@@ -40,9 +41,15 @@ final class AppState {
     var messageDraft: MessageDraft?
     private(set) var isActive = true
 
+    var myPhoto: UIImage? = UIImage(contentsOfFile: AppState.photoURL(me: true).path())
+    var partnerPhoto: UIImage? = UIImage(contentsOfFile: AppState.photoURL(me: false).path())
+
     let haptics = HapticEngine()
     let location = LocationManager()
+    let motion = MotionSense()
     let calendar = CalendarBridge()
+    @ObservationIgnored private var reportedLocationOff = false
+    @ObservationIgnored private var diedAlerted = false
     @ObservationIgnored private var sync: SyncService?
     @ObservationIgnored private var started = false
     @ObservationIgnored private var simulatedMissed = false
@@ -57,13 +64,114 @@ final class AppState {
         guard !started else { return }
         started = true
         UIDevice.current.isBatteryMonitoringEnabled = true
-        location.onUpdate = { [weak self] in self?.publish($0) }
+        location.onUpdate = { [weak self] location in
+            self?.motion.updateSpeed(location.speed)
+            self?.publish(location)
+        }
+        location.onAuthorizationChange = { [weak self] in self?.authorizationChanged($0) }
+        motion.onChange = { [weak self] _ in
+            guard let self, let last = self.location.lastLocation else { return }
+            self.publish(last) // posture changes while sitting still never trigger a location update
+        }
         location.keepAlive = settings.stayConnected
         restartSync()
         resumeSharingIfNeeded()
         Task {
             _ = await Notifier.requestPermission()
             if settings.syncCalendar { _ = await importCalendarBusy() }
+        }
+        Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60))
+                self?.checkPartnerWentQuiet()
+            }
+        }
+    }
+
+    // MARK: Location off / Ghost (so the partner is told)
+
+    private func authorizationChanged(_ status: CLAuthorizationStatus) {
+        guard settings.sharingEnabled, settings.precision != .ghost else { return }
+        if status == .denied || status == .restricted {
+            reportLocationOff()
+        } else if reportedLocationOff, status == .authorizedWhenInUse || status == .authorizedAlways {
+            reportedLocationOff = false
+            resumeSharingIfNeeded()
+        }
+    }
+
+    /// Location Services just went off: tell the partner before iOS suspends us (a background task buys a few seconds).
+    private func reportLocationOff() {
+        guard !reportedLocationOff else { return }
+        reportedLocationOff = true
+        motion.stop()
+        let task = UIApplication.shared.beginBackgroundTask(withName: "location-off", expirationHandler: nil)
+        sync?.sendLocation(LocationShare(userId: settings.deviceId, precision: settings.precision, battery: batteryPercent, locationOff: true))
+        Task {
+            try? await Task.sleep(for: .seconds(8))
+            UIApplication.shared.endBackgroundTask(task)
+        }
+    }
+
+    /// Life360-style "phone probably died": low battery, then silence.
+    private func checkPartnerWentQuiet() {
+        guard settings.alertBattery, !diedAlerted, let loc = partnerLocation, loc.precision != .ghost, loc.locationOff != true,
+              let battery = loc.battery, battery <= 10 else { return }
+        let quiet = Date().timeIntervalSince(loc.updatedAt)
+        guard quiet > 15 * 60 else { return }
+        diedAlerted = true
+        alert("🪫 \(settings.partnerName)'s phone probably died", "Last seen at \(battery)%, \(Int(quiet / 60)) min ago.")
+    }
+
+    // MARK: Profile photos
+
+    nonisolated static func photoURL(me: Bool) -> URL {
+        URL.documentsDirectory.appending(path: me ? "avatar-me.jpg" : "avatar-partner.jpg")
+    }
+
+    /// Center-crops to a 512 px square JPEG (small enough to sync quickly).
+    static func squareJPEG(_ image: UIImage, side: CGFloat = 512) -> Data? {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let rendered = UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format).image { _ in
+            let scale = max(side / image.size.width, side / image.size.height)
+            let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+            image.draw(in: CGRect(x: (side - size.width) / 2, y: (side - size.height) / 2, width: size.width, height: size.height))
+        }
+        return rendered.jpegData(compressionQuality: 0.8)
+    }
+
+    /// `me == false` sets the partner's photo on this phone only (their own upload replaces it in Live mode).
+    func setPhoto(_ data: Data, me: Bool) {
+        guard let image = UIImage(data: data), let jpeg = Self.squareJPEG(image) else { return showToast("That image couldn't be read.") }
+        do {
+            try jpeg.write(to: Self.photoURL(me: me), options: .atomic)
+        } catch {
+            return showToast("Couldn't save the photo: \(error.localizedDescription)")
+        }
+        if me {
+            myPhoto = UIImage(data: jpeg)
+            Task {
+                do { try await sync?.sendAvatar(jpeg) } catch { showToast("Photo saved here, but upload failed: \(error.localizedDescription)") }
+            }
+        } else {
+            partnerPhoto = UIImage(data: jpeg)
+        }
+    }
+
+    func removePhoto(me: Bool) {
+        try? FileManager.default.removeItem(at: Self.photoURL(me: me))
+        if me { myPhoto = nil } else { partnerPhoto = nil }
+    }
+
+    private func downloadPartnerPhoto(_ url: URL) {
+        guard UserDefaults.standard.string(forKey: "partnerPhotoSource") != url.absoluteString else { return }
+        Task {
+            guard let (data, response) = try? await URLSession.shared.data(from: url),
+                  (response as? HTTPURLResponse)?.statusCode == 200, let image = UIImage(data: data) else { return }
+            try? data.write(to: Self.photoURL(me: false), options: .atomic)
+            partnerPhoto = image
+            UserDefaults.standard.set(url.absoluteString, forKey: "partnerPhotoSource")
         }
     }
 
@@ -93,7 +201,10 @@ final class AppState {
 
     /// App became active (a foreground moment, so iOS allows starting location updates).
     func resumeSharingIfNeeded() {
-        if settings.sharingEnabled, settings.precision != .ghost, !location.isUpdating { location.start() }
+        guard settings.sharingEnabled, settings.precision != .ghost else { return }
+        if location.isDenied { return reportLocationOff() } // turned off while we were suspended
+        if !location.isUpdating { location.start() }
+        if settings.shareActivity { motion.start() } else { motion.stop() }
     }
 
     func didEnterBackground() { UserDefaults.standard.set(Date(), forKey: "lastActive") }
@@ -144,6 +255,9 @@ final class AppState {
         case let .location(l):
             checkPartnerAlerts(old: partnerLocation, new: l)
             partnerLocation = l
+            diedAlerted = false
+        case let .profile(userId, url):
+            if isPartner(userId) { downloadPartnerPhoto(url) }
         case let .eventUpserted(e):
             if let i = events.firstIndex(where: { $0.id == e.id }) { events[i] = e } else { events.append(e) }
         case let .eventDeleted(id):
@@ -183,6 +297,16 @@ final class AppState {
             batteryBucket = bucket
         }
         guard old != nil else { return } // first fix after launch is not an arrival
+        if settings.alertPrivacy {
+            let wasHidden = old?.precision == .ghost || old?.locationOff == true
+            if new.locationOff == true, old?.locationOff != true {
+                alert("⚠️ \(name) turned off location", "Location Services are off on their phone, so their pin won't update.")
+            } else if new.precision == .ghost, old?.precision != .ghost {
+                alert("👻 \(name) went Ghost", "They paused location sharing.")
+            } else if wasHidden, new.precision != .ghost, new.locationOff != true {
+                alert("📍 \(name) is sharing again", new.placeLabel ?? new.city ?? "Their pin is back on the map.")
+            }
+        }
         if settings.alertArrivals, let place = new.placeLabel, place != old?.placeLabel,
            Date().timeIntervalSince(lastArrivalAlert[place] ?? .distantPast) > 600 {
             lastArrivalAlert[place] = Date()
@@ -201,7 +325,10 @@ final class AppState {
         Notifier.post(title: "💓 \(name) sent a Heartbeat", body: "Open Pulse & Plan to feel it.", after: 5)
         Notifier.post(title: "🔋 \(name)'s phone is at 12%", body: "Their battery is getting low.", after: 8)
         Notifier.post(title: "📍 \(name) arrived", body: "\(name) is at home.", after: 11)
-        showToast("Lock your phone: 3 test alerts arrive in 5–11 s")
+        Notifier.post(title: "👻 \(name) went Ghost", body: "They paused location sharing.", after: 14)
+        Notifier.post(title: "⚠️ \(name) turned off location", body: "Location Services are off on their phone.", after: 17)
+        showToast("Lock your phone: 5 test alerts arrive in 5–17 s")
+        (sync as? DemoPartnerService)?.simulateGhost(after: 25, for: 20) // and a real in-app Ghost alert in Demo mode
     }
 
     // MARK: On my way & iMessage
@@ -357,10 +484,12 @@ final class AppState {
         settings.precision = mode
         if mode == .ghost {
             location.stop()
+            motion.stop()
             sync?.sendLocation(LocationShare(userId: settings.deviceId, precision: .ghost))
         } else {
             settings.sharingEnabled = true
             location.start()
+            if settings.shareActivity { motion.start() }
             if let last = location.lastLocation { publish(last) }
         }
     }
@@ -372,9 +501,12 @@ final class AppState {
         // Fuzzy hides saved-place badges and the neighborhood: they would undo the 3 km blur.
         let place = mode == .live ? savedPlaces.first { $0.coordinate.distance(to: loc.coordinate) <= $0.radius } : nil
         let city = mode == .fuzzy ? location.placeName?.components(separatedBy: ", ").last : location.placeName
+        // Speed only in Live mode (it would hint at the route); stale GPS speeds are dropped.
+        let speed = mode == .live && loc.speed >= 0 && Date().timeIntervalSince(loc.timestamp) < 60 ? loc.speed : nil
         sync?.sendLocation(LocationShare(userId: settings.deviceId, lat: coord.latitude, lng: coord.longitude,
                                          precision: mode, battery: batteryPercent,
-                                         placeLabel: place.map { "At \($0.name)" }, city: city))
+                                         placeLabel: place.map { "At \($0.name)" }, city: city,
+                                         activity: settings.shareActivity ? motion.activity : nil, speed: speed))
     }
 
     var myCoordinate: CLLocationCoordinate2D? { location.lastLocation?.coordinate }

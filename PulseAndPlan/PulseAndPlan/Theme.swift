@@ -211,7 +211,7 @@ struct SplashView: View {
                 }
                 Text("Pulse & Plan")
                     .font(.system(size: 36, weight: .heavy, design: .rounded))
-                Text("\(state.settings.myAvatar)  ♥  \(state.settings.partnerAvatar)")
+                HStack(spacing: 14) { AvatarView(isMe: true, size: 56); Text("♥").font(.title).foregroundStyle(state.theme.accent); AvatarView(isMe: false, size: 56) }
                     .font(.title2)
             }
         }

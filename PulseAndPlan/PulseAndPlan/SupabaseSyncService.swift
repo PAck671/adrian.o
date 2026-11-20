@@ -34,7 +34,8 @@ final class SupabaseSyncService: SyncService {
     private var stopped = false
     private var topic: String { "realtime:couple-\(code)" }
 
-    private static let tables = ["couples", "pulses", "videos", "movie_swipes", "game_sessions", "events", "locations", "notes", "notices"]
+    private static let tables = ["couples", "pulses", "videos", "movie_swipes", "game_sessions", "events", "locations", "notes", "notices",
+                                 "profiles"]
 
     init?(settings: AppSettings) {
         guard Config.isSupabaseConfigured, let url = URL(string: Config.SUPABASE_URL),
@@ -85,6 +86,9 @@ final class SupabaseSyncService: SyncService {
             }
             for row in try await rows("notes", ["order": "updated_at.asc"]) {
                 if let n = note(row) { emit(.noteUpserted(n)) }
+            }
+            for row in try await rows("profiles", ["user_id": "neq.\(me.uuidString)"]) {
+                if let p = profile(row) { emit(.profile(userId: p.0, avatarURL: p.1)) }
             }
             emit(.status("Paired · code \(code)"))
         } catch {
@@ -146,7 +150,24 @@ final class SupabaseSyncService: SyncService {
             "couple_code": code, "user_id": me.uuidString, "lat": orNull(l.lat), "lng": orNull(l.lng),
             "precision_mode": l.precision.rawValue, "battery_level": orNull(l.battery),
             "place_label": orNull(l.placeLabel), "city": orNull(l.city), "updated_at": Self.iso(l.updatedAt),
+            "activity": orNull(l.activity?.rawValue), "speed": orNull(l.speed), "location_off": l.locationOff ?? false,
         ])
+    }
+
+    /// Uploads (or replaces) your square profile photo, then points your profiles row at it.
+    func sendAvatar(_ jpeg: Data) async throws {
+        let path = "\(code)/\(me.uuidString).jpg"
+        var request = URLRequest(url: base.appending(path: "storage/v1/object/avatars/\(path)"))
+        request.httpMethod = "POST"
+        authorize(&request)
+        request.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
+        request.setValue("true", forHTTPHeaderField: "x-upsert")
+        let (data, response) = try await URLSession.shared.upload(for: request, from: jpeg)
+        try check(response, data)
+        try await send("POST", "profiles", query: ["on_conflict": "couple_code,user_id"],
+                       body: json(["couple_code": code, "user_id": me.uuidString, "name": myName,
+                                   "avatar_path": path, "updated_at": Self.iso(Date())]),
+                       prefer: "resolution=merge-duplicates,return=minimal")
     }
 
     private func orNull(_ value: Any?) -> Any { value ?? NSNull() }
@@ -385,6 +406,8 @@ final class SupabaseSyncService: SyncService {
             if let n = note(r) { emit(.noteUpserted(n)) }
         case "notices":
             if let n = notice(r), n.senderId != me, Date().timeIntervalSince(n.sentAt) < 600 { emit(.notice(n)) }
+        case "profiles":
+            if let p = profile(r), p.0 != me { emit(.profile(userId: p.0, avatarURL: p.1)) }
         default:
             break
         }
@@ -394,6 +417,15 @@ final class SupabaseSyncService: SyncService {
         guard let id = uuid(r["id"]), let author = uuid(r["author_id"]), let text = r["text"] as? String else { return nil }
         return SharedNote(id: id, text: text, color: (r["color"] as? String).flatMap(NoteColor.init(rawValue:)) ?? .yellow,
                           pinned: r["pinned"] as? Bool ?? false, authorId: author, updatedAt: date(r["updated_at"]) ?? Date())
+    }
+
+    /// Public avatar URL, versioned by updated_at so a new photo isn't served from cache.
+    private func profile(_ r: Row) -> (UUID, URL)? {
+        guard let user = uuid(r["user_id"]), let path = r["avatar_path"] as? String else { return nil }
+        let version = Int(date(r["updated_at"])?.timeIntervalSince1970 ?? 0)
+        let url = base.appending(path: "storage/v1/object/public/avatars/\(path)")
+            .appending(queryItems: [URLQueryItem(name: "v", value: String(version))])
+        return (user, url)
     }
 
     private func notice(_ r: Row) -> PartnerNotice? {
@@ -441,7 +473,9 @@ final class SupabaseSyncService: SyncService {
         return LocationShare(userId: user, lat: number(r["lat"])?.doubleValue, lng: number(r["lng"])?.doubleValue,
                              precision: precision, battery: number(r["battery_level"])?.intValue,
                              placeLabel: r["place_label"] as? String, city: r["city"] as? String,
-                             updatedAt: date(r["updated_at"]) ?? Date())
+                             updatedAt: date(r["updated_at"]) ?? Date(),
+                             activity: (r["activity"] as? String).flatMap(PartnerActivity.init(rawValue:)),
+                             speed: number(r["speed"])?.doubleValue, locationOff: r["location_off"] as? Bool)
     }
 
     private func game(_ r: Row) -> GameState? {

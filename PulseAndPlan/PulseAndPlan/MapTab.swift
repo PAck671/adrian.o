@@ -24,7 +24,7 @@ struct MapTab: View {
                             .stroke(.indigo.opacity(0.6), lineWidth: 1)
                     }
                     Annotation(settings.myName, coordinate: me) {
-                        AvatarPin(emoji: settings.myAvatar, color: .indigo, dimmed: settings.precision == .ghost)
+                        AvatarPin(isMe: true, color: .indigo, dimmed: settings.precision == .ghost)
                     }
                 }
                 if let p = partner?.coordinate {
@@ -34,7 +34,7 @@ struct MapTab: View {
                             .stroke(.tint.opacity(0.6), lineWidth: 1)
                     }
                     Annotation(settings.partnerName, coordinate: p) {
-                        AvatarPin(emoji: settings.partnerAvatar, color: .pink, badge: partner?.placeLabel)
+                        AvatarPin(isMe: false, color: state.theme.accent, badge: partner?.placeLabel ?? partner?.activity.map { "\($0.emoji) \($0.label)" })
                     }
                     if let me = state.myCoordinate {
                         MapPolyline(coordinates: [me, p], contourStyle: .geodesic)
@@ -118,11 +118,20 @@ struct MapTab: View {
 
             if let partner {
                 HStack(spacing: 10) {
-                    Text(settings.partnerAvatar).font(.title2)
+                    AvatarView(isMe: false, size: 38)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(partner.precision == .ghost ? "\(settings.partnerName) is in Ghost Mode 👻"
-                                                         : partner.placeLabel ?? partner.city ?? settings.partnerName)
+                        Text(partner.locationOff == true ? "\(settings.partnerName) turned off location ⚠️"
+                             : partner.precision == .ghost ? "\(settings.partnerName) is in Ghost Mode 👻"
+                             : partner.placeLabel ?? partner.city ?? settings.partnerName)
                             .font(.subheadline.weight(.semibold))
+                        if let activity = partner.activity, partner.precision != .ghost, partner.locationOff != true {
+                            Text("\(activity.emoji) \(activity.label)"
+                                 + (activity.isMoving && (partner.speed ?? 0) > 0.5 ? " · \(formatSpeed(partner.speed ?? 0, miles: settings.useMiles))" : ""))
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.tint)
+                                .contentTransition(.opacity)
+                                .animation(.easeInOut, value: activity)
+                        }
                         HStack(spacing: 4) {
                             Text("Updated")
                             Text(partner.updatedAt, style: .relative)
@@ -143,9 +152,16 @@ struct MapTab: View {
             }
 
             HStack(spacing: 10) {
-                Text(settings.myAvatar).font(.title2)
-                Text(state.location.placeName ?? (state.myCoordinate == nil ? "Your location is off" : "You"))
-                    .font(.subheadline)
+                AvatarView(isMe: true, size: 38)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(state.location.placeName ?? (state.myCoordinate == nil ? "Your location is off" : "You"))
+                        .font(.subheadline)
+                    if let mine = state.motion.activity, settings.shareActivity {
+                        Text("\(mine.emoji) \(mine.label.replacingOccurrences(of: "their", with: "your"))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 Spacer()
                 Text(settings.precision.label).font(.caption.weight(.bold)).foregroundStyle(color(for: settings.precision))
             }
@@ -191,7 +207,7 @@ struct MapTab: View {
 }
 
 struct AvatarPin: View {
-    let emoji: String
+    let isMe: Bool
     let color: Color
     var badge: String?
     var dimmed = false
@@ -206,10 +222,7 @@ struct AvatarPin: View {
                     .background(Capsule().fill(color))
                     .foregroundStyle(.white)
             }
-            Text(emoji)
-                .font(.system(size: 24))
-                .frame(width: 44, height: 44)
-                .background(Circle().fill(.black))
+            AvatarView(isMe: isMe, size: 44)
                 .overlay(Circle().stroke(color, lineWidth: 3))
                 .opacity(dimmed ? 0.4 : 1)
         }

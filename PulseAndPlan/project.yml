@@ -43,6 +43,7 @@ targets:
         NSLocationAlwaysAndWhenInUseUsageDescription: "Allow Always so your partner keeps seeing where you are when the app is in the background. You can pause anytime with Ghost Mode."
         NSCalendarsFullAccessUsageDescription: "Pulse & Plan reads when you're busy (never event titles) to find free time with your partner, and adds plans you make together to your calendar."
         NSCalendarsWriteOnlyAccessUsageDescription: "Pulse & Plan adds plans you make together to your calendar."
+        NSMotionUsageDescription: "Pulse & Plan uses motion and fitness data to show your partner whether you're walking, driving, sitting or resting. Turn it off anytime in Settings."
   PulseAndPlanTests:
     type: bundle.unit-test
     platform: iOS
