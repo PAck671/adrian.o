@@ -1,0 +1,334 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		632A8E901CEA8A640FEBB95F /* LG.swift in Sources */ = {isa = PBXBuildFile; fileRef = 222EA29F04C5FCBB775DABA4 /* LG.swift */; };
+		6F51AB9143D10EBF16CFF278 /* Voice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 224993A7D69CE14FEC93A745 /* Voice.swift */; };
+		724B9C1EB10AB5DA5AE03E54 /* TVController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EABC4FBD0547A690B9B1126 /* TVController.swift */; };
+		ADCA2E20BCA64ACD30984693 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FE9E71A7D795B136BF448B26 /* Assets.xcassets */; };
+		AEA9682519DB254A04F05EF3 /* ADB.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D747C110745C91CA9B29B83 /* ADB.swift */; };
+		AF3BC347346BD77FDD257C74 /* TVCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0BCD6CFA17C3F7ECF83651F /* TVCommands.swift */; };
+		C0E81AE308B5748E14FCA185 /* LGViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED2113C04D8D1AB13F1299C9 /* LGViews.swift */; };
+		E1F2E7EEDA9D5FA0C4560727 /* Cast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 482164D6F958B0A070A488EA /* Cast.swift */; };
+		E76F732F9582A81CFB9639C3 /* TVControlApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B9CDB90A494C573E23ADCCD /* TVControlApp.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		1DE65C7AE29EDDCDE57AF58E /* TVControl.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = TVControl.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		222EA29F04C5FCBB775DABA4 /* LG.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LG.swift; sourceTree = "<group>"; };
+		224993A7D69CE14FEC93A745 /* Voice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Voice.swift; sourceTree = "<group>"; };
+		3B9CDB90A494C573E23ADCCD /* TVControlApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVControlApp.swift; sourceTree = "<group>"; };
+		3D747C110745C91CA9B29B83 /* ADB.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ADB.swift; sourceTree = "<group>"; };
+		482164D6F958B0A070A488EA /* Cast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Cast.swift; sourceTree = "<group>"; };
+		5EABC4FBD0547A690B9B1126 /* TVController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVController.swift; sourceTree = "<group>"; };
+		AEAFD9A635C56C02DDE49114 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		E0BCD6CFA17C3F7ECF83651F /* TVCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVCommands.swift; sourceTree = "<group>"; };
+		ED2113C04D8D1AB13F1299C9 /* LGViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LGViews.swift; sourceTree = "<group>"; };
+		FE9E71A7D795B136BF448B26 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		0ACCE1E7D11FFF3D622804BF /* TVControl */ = {
+			isa = PBXGroup;
+			children = (
+				3D747C110745C91CA9B29B83 /* ADB.swift */,
+				FE9E71A7D795B136BF448B26 /* Assets.xcassets */,
+				482164D6F958B0A070A488EA /* Cast.swift */,
+				AEAFD9A635C56C02DDE49114 /* Info.plist */,
+				222EA29F04C5FCBB775DABA4 /* LG.swift */,
+				ED2113C04D8D1AB13F1299C9 /* LGViews.swift */,
+				E0BCD6CFA17C3F7ECF83651F /* TVCommands.swift */,
+				3B9CDB90A494C573E23ADCCD /* TVControlApp.swift */,
+				5EABC4FBD0547A690B9B1126 /* TVController.swift */,
+				224993A7D69CE14FEC93A745 /* Voice.swift */,
+			);
+			path = TVControl;
+			sourceTree = "<group>";
+		};
+		3218FAA30098BF2C1782AB23 = {
+			isa = PBXGroup;
+			children = (
+				0ACCE1E7D11FFF3D622804BF /* TVControl */,
+				5D2F22502697101D44BF856F /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		5D2F22502697101D44BF856F /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				1DE65C7AE29EDDCDE57AF58E /* TVControl.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		6659419C467D0F763AC1381E /* TVControl */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2DA70BF84E1F17BB6F43E795 /* Build configuration list for PBXNativeTarget "TVControl" */;
+			buildPhases = (
+				DE6CD06D071E46D449691E6D /* Sources */,
+				437F59B695A9B17C13033565 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = TVControl;
+			packageProductDependencies = (
+			);
+			productName = TVControl;
+			productReference = 1DE65C7AE29EDDCDE57AF58E /* TVControl.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		CDDF2AAEB3C72ABC148D642A /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					6659419C467D0F763AC1381E = {
+						DevelopmentTeam = "";
+					};
+				};
+			};
+			buildConfigurationList = 1F642EC231F361019597B0D9 /* Build configuration list for PBXProject "TVControl" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 3218FAA30098BF2C1782AB23;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 5D2F22502697101D44BF856F /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				6659419C467D0F763AC1381E /* TVControl */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		437F59B695A9B17C13033565 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				ADCA2E20BCA64ACD30984693 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		DE6CD06D071E46D449691E6D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AEA9682519DB254A04F05EF3 /* ADB.swift in Sources */,
+				E1F2E7EEDA9D5FA0C4560727 /* Cast.swift in Sources */,
+				632A8E901CEA8A640FEBB95F /* LG.swift in Sources */,
+				C0E81AE308B5748E14FCA185 /* LGViews.swift in Sources */,
+				AF3BC347346BD77FDD257C74 /* TVCommands.swift in Sources */,
+				E76F732F9582A81CFB9639C3 /* TVControlApp.swift in Sources */,
+				724B9C1EB10AB5DA5AE03E54 /* TVController.swift in Sources */,
+				6F51AB9143D10EBF16CFF278 /* Voice.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		1B8FDA00874789B575FBECB6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 2;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.1;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		4E1B334D8C533424C2AD1BDA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 2;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.1;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		546D18AD3D148498BFA6B71B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = TVControl/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.adriantools.tvcontrol;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		A0CAAEB6ABA77C2B2BCC8769 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = TVControl/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.adriantools.tvcontrol;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		1F642EC231F361019597B0D9 /* Build configuration list for PBXProject "TVControl" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4E1B334D8C533424C2AD1BDA /* Debug */,
+				1B8FDA00874789B575FBECB6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		2DA70BF84E1F17BB6F43E795 /* Build configuration list for PBXNativeTarget "TVControl" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A0CAAEB6ABA77C2B2BCC8769 /* Debug */,
+				546D18AD3D148498BFA6B71B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = CDDF2AAEB3C72ABC148D642A /* Project object */;
+}
