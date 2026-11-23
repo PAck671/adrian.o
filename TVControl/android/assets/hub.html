@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src file:; style-src 'unsafe-inline'">
+<title>TV Control Hub</title>
+<style>
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+[hidden] { display: none !important; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; color: #fff; font: 18px/1.3 system-ui, sans-serif; user-select: none; }
+#ui { position: fixed; inset: 0; display: grid; grid-template-columns: minmax(0, 1fr) 320px; background: #000; }
+#self { width: 100%; height: 100%; object-fit: cover; background: #111; transform: scaleX(-1); }
+#side { grid-column: 2; display: flex; flex-direction: column; justify-content: center; gap: 14px; padding: 24px; }
+#badge { align-self: flex-start; padding: 6px 14px; border-radius: 8px; background: #d92d20; font-weight: 800; letter-spacing: 1px; }
+h1 { margin: 0; font-size: 28px; }
+p { margin: 0; color: #c8c8c8; }
+button { height: 64px; border: 0; border-radius: 14px; color: #fff; font: inherit; font-weight: 700; touch-action: manipulation; }
+#answer { background: #12873f; }
+#end { background: #d92d20; }
+</style>
+</head>
+<body>
+<div id="ui" hidden>
+  <video id="self" autoplay muted playsinline></video>
+  <div id="side" role="status">
+    <div id="badge">LIVE</div>
+    <h1 id="title"></h1>
+    <p id="sub"></p>
+    <button id="answer">Answer</button>
+    <button id="end">End</button>
+  </div>
+</div>
+<script src="proto.js"></script>
+<script src="net.js"></script>
+<script src="hub.js"></script>
+</body>
+</html>

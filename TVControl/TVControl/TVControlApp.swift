@@ -29,6 +29,7 @@ struct RootView: View {
             AppsTab().tabItem { Label("Apps", systemImage: "square.grid.2x2") }
             CastTab().tabItem { Label("Cast", systemImage: "play.tv") }
             TVTab().tabItem { Label("TV", systemImage: "slider.horizontal.3") }
+            HomeTab().tabItem { Label("Home", systemImage: "video.fill") }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
             VStack(spacing: 0) {

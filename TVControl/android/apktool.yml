@@ -1,0 +1,14 @@
+version: 3.0.3
+apkFileName: TVControl.apk
+usesFramework:
+  ids:
+  - 1
+sdkInfo:
+  minSdkVersion: 26
+  # shortcut: 29 lets the JDK's v1 signature install, 30+ needs apksigner from the Android SDK.
+  targetSdkVersion: 29
+versionInfo:
+  versionCode: 2
+  versionName: 1.1
+doNotCompress:
+- resources.arsc

@@ -1,0 +1,25 @@
+name: Build TV Control IPA
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "TVControl/**"
+      - ".github/workflows/build-tvcontrol-ipa.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Build unsigned IPA
+        working-directory: TVControl
+        run: ./build_ipa.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TVControl-unsigned-ipa
+          path: TVControl/dist/TVControl-unsigned.ipa
+          if-no-files-found: error
