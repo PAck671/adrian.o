@@ -1,0 +1,7 @@
+ios/FamilyScreen.xcodeproj/
+ios/FamilyScreen/Info.plist
+ios/build/
+ios/dist/
+android/build/
+android/.gradle/
+.DS_Store
